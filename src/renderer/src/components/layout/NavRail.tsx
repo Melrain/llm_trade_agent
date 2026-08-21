@@ -17,7 +17,7 @@ export function NavRail(): JSX.Element {
   const setActivePage = useAppStore((s) => s.setActivePage)
 
   return (
-    <nav className="flex w-16 shrink-0 flex-col items-center border-r border-border bg-sidebar py-2">
+    <nav className="flex w-[72px] shrink-0 flex-col items-center border-r border-border bg-sidebar py-2">
       <div className="flex flex-1 flex-col items-center gap-1">
         {ITEMS.map((item) => (
           <NavButton
@@ -55,12 +55,12 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex w-14 flex-col items-center gap-1 rounded-lg py-2 text-muted-foreground hover:bg-accent hover:text-foreground',
+        'flex w-16 flex-col items-center gap-1 rounded-lg py-2 text-muted-foreground hover:bg-accent hover:text-foreground',
         active && 'bg-accent text-foreground'
       )}
     >
-      <Icon className="size-4" />
-      <span className="text-[10px] leading-none">{label}</span>
+      <Icon className="size-5" />
+      <span className="text-[12px] leading-none">{label}</span>
     </button>
   )
 }

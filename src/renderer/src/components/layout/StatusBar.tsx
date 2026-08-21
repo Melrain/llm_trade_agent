@@ -97,7 +97,7 @@ export function StatusBar(): JSX.Element {
   ]
 
   return (
-    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-border bg-sidebar px-3 text-[11px] text-muted-foreground">
+    <footer className="flex h-8 shrink-0 items-center gap-3 border-t border-border bg-sidebar px-3 text-[13px] text-muted-foreground">
       {items.map((item) => (
         <Popover key={item.id}>
           <PopoverTrigger asChild>

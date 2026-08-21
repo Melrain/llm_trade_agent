@@ -61,6 +61,7 @@ export function TopBar(): JSX.Element {
   const calendar = useNewsStore((s) => s.calendar)
 
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [needKeyOpen, setNeedKeyOpen] = useState(false)
   const [flash, setFlash] = useState<'up' | 'down' | null>(null)
   const prevMid = useRef<number | null>(null)
 
@@ -89,49 +90,69 @@ export function TopBar(): JSX.Element {
     return () => window.clearTimeout(t)
   }, [mid])
 
+  const tradingSwitch = (
+    <Switch
+      size="sm"
+      checked={tradingEnabled}
+      disabled={saving || !config}
+      className={cn(tradingEnabled && 'data-[state=checked]:bg-amber-500')}
+      onCheckedChange={(on) => {
+        if (!on) {
+          void saveConfig({ tradingEnabled: false })
+          return
+        }
+        if (!config?.hasApiKey) {
+          setNeedKeyOpen(true)
+          return
+        }
+        setConfirmOpen(true)
+      }}
+    />
+  )
+
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-card px-3">
+    <header className="flex h-16 shrink-0 items-center gap-3.5 border-b border-border bg-card px-4">
       <button
         type="button"
         onClick={() => setActivePage('chart')}
-        className="flex min-w-[168px] items-baseline gap-2 rounded-md px-1.5 py-1 text-left hover:bg-accent"
+        className="flex min-w-[196px] items-baseline gap-2 rounded-md px-1.5 py-1 text-left hover:bg-accent"
       >
-        <span className="text-xs font-medium text-muted-foreground">{symbol}</span>
+        <span className="text-[15px] font-medium text-muted-foreground">{symbol}</span>
         <span
           className={cn(
-            'font-mono text-[15px] font-semibold tabular-nums',
+            'font-mono text-[20px] font-semibold tabular-nums',
             flash === 'up' && 'text-emerald-400',
             flash === 'down' && 'text-red-400'
           )}
         >
           {formatNum(mid)}
         </span>
-        <span className={cn('text-xs tabular-nums', pnlTone(change24h))}>
+        <span className={cn('text-[15px] tabular-nums', pnlTone(change24h))}>
           {change24h != null && change24h > 0 ? '▲' : change24h != null && change24h < 0 ? '▼' : ''}
           {formatSignedPct(change24h)}
         </span>
       </button>
 
-      <div className="h-5 w-px bg-border" />
+      <div className="h-6 w-px bg-border" />
 
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <HealthDot status={enabled ? 'ok' : 'idle'} pulse={enabled} className="size-2" />
-        <span className="text-[13px] text-foreground">
+        <HealthDot status={enabled ? 'ok' : 'idle'} pulse={enabled} className="size-2.5" />
+        <span className="text-[17px] text-foreground">
           {running ? '决策中' : enabled ? 'Agent 运行中' : 'Agent 已停止'}
         </span>
         {enabled && lastDecision && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-[15px] text-muted-foreground">
             · 下次决策 {remainMs > 0 ? formatCountdown(remainMs) : '即将'}
           </span>
         )}
         {enabled && !lastDecision && (
-          <span className="text-xs text-muted-foreground">· 等待首次决策</span>
+          <span className="text-[15px] text-muted-foreground">· 等待首次决策</span>
         )}
         {haltWindow && (
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="inline-flex text-amber-400">
-                <Lock className="size-3.5" />
+                <Lock className="size-4" />
               </span>
             </TooltipTrigger>
             <TooltipContent>高影响事件窗口，暂停开仓</TooltipContent>
@@ -142,40 +163,53 @@ export function TopBar(): JSX.Element {
       <div className="flex items-center gap-2">
         <span
           className={cn(
-            'text-xs font-medium',
+            'text-[15px] font-medium',
             tradingEnabled ? 'text-amber-400' : 'text-muted-foreground'
           )}
         >
           {tradingEnabled ? '实弹' : '自动交易'}
         </span>
-        <Switch
-          size="sm"
-          checked={tradingEnabled}
-          disabled={saving || !config}
-          className={cn(tradingEnabled && 'data-[state=checked]:bg-amber-500')}
-          onCheckedChange={(on) => {
-            if (on) setConfirmOpen(true)
-            else void saveConfig({ tradingEnabled: false })
-          }}
-        />
+        {tradingSwitch}
       </div>
 
-      <div className="h-5 w-px bg-border" />
+      <div className="h-6 w-px bg-border" />
 
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">净值</span>
-        <span className="font-mono text-[13px] font-medium tabular-nums">
+        <span className="text-[15px] text-muted-foreground">净值</span>
+        <span className="font-mono text-[17px] font-medium tabular-nums">
           {formatMoneyish(equity)}
         </span>
-        <PnlText value={profit} withIcon className="text-xs" />
+        <PnlText value={profit} withIcon className="text-[15px]" />
       </div>
 
       <AccountBadge mode={accountMode} />
 
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-[15px] text-muted-foreground">
         <span>MT5</span>
         <HealthDot status={mt5} />
       </div>
+
+      <AlertDialog open={needKeyOpen} onOpenChange={setNeedKeyOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>尚未配置 API Key</AlertDialogTitle>
+            <AlertDialogDescription>
+              没有 API Key 无法调用模型，自动交易无法启动。请先到设置中填写。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setNeedKeyOpen(false)
+                setActivePage('settings')
+              }}
+            >
+              去配置
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
@@ -210,7 +244,7 @@ function formatMoneyish(value: number | null): string {
 function AccountBadge({ mode }: { mode: 'demo' | 'real' | 'unknown' }): JSX.Element {
   if (mode === 'real') {
     return (
-      <Badge className="rounded-md border-transparent bg-red-500 px-1.5 text-[10px] text-white">
+      <Badge className="rounded-md border-transparent bg-red-500 px-2 text-[14px] text-white">
         REAL
       </Badge>
     )
@@ -219,14 +253,14 @@ function AccountBadge({ mode }: { mode: 'demo' | 'real' | 'unknown' }): JSX.Elem
     return (
       <Badge
         variant="outline"
-        className="rounded-md border-cyan-400/80 px-1.5 text-[10px] text-cyan-300"
+        className="rounded-md border-cyan-400/80 px-2 text-[14px] text-cyan-300"
       >
         DEMO
       </Badge>
     )
   }
   return (
-    <Badge variant="secondary" className="rounded-md px-1.5 text-[10px] text-muted-foreground">
+    <Badge variant="secondary" className="rounded-md px-2 text-[14px] text-muted-foreground">
       未知
     </Badge>
   )

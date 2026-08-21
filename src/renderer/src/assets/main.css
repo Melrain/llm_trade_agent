@@ -133,7 +133,7 @@
     overflow: hidden;
   }
   body {
-    @apply bg-background text-foreground text-[13px] antialiased;
+    @apply bg-background text-foreground text-[15px] antialiased;
     font-family: system-ui, 'Segoe UI', 'Microsoft YaHei', sans-serif;
     font-variant-numeric: tabular-nums;
   }

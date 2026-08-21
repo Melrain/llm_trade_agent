@@ -122,6 +122,7 @@ export class AgentEngine {
   private reconciling = false
   private started = false
   private lastRunAt = 0
+  private lastTimerLog: string | null = null
 
   constructor(
     private readonly snapshots: SnapshotService,
@@ -163,7 +164,8 @@ export class AgentEngine {
     this.timer = null
     const cfg = getPublicConfig()
     if (!cfg.enabled || !cfg.hasApiKey) {
-      console.log('[agent] 自动决策未启动', !cfg.enabled ? '开关关闭' : '未配置密钥')
+      const reason = !cfg.enabled ? 'enabled=off' : 'no-api-key'
+      this.logTimer(`scheduler idle (${reason})`)
       return
     }
     if (!wasArmed) {
@@ -189,11 +191,14 @@ export class AgentEngine {
         console.warn('[agent]', message)
       })
     }, SCHEDULER_TICK_MS)
-    console.log(
-      '[agent] 自动决策已启动',
-      `周期 ${Math.round(cfg.intervalMs / 60_000)} 分钟`,
-      this.lastRunAt === 0 ? '即将执行' : `上次 ${new Date(this.lastRunAt).toISOString()}`
-    )
+    const when = this.lastRunAt === 0 ? 'due-soon' : `last=${new Date(this.lastRunAt).toISOString()}`
+    this.logTimer(`scheduler on interval=${Math.round(cfg.intervalMs / 60_000)}m ${when}`)
+  }
+
+  private logTimer(message: string): void {
+    if (this.lastTimerLog === message) return
+    this.lastTimerLog = message
+    console.log(`[agent] ${message}`)
   }
 
   async runOnce(): Promise<AgentRecord> {

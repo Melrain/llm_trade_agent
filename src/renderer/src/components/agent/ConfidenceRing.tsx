@@ -36,7 +36,7 @@ export function ConfidenceRing({
           className={ok ? 'text-emerald-400' : 'text-muted-foreground'}
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[10px] tabular-nums text-foreground">
+      <span className="absolute inset-0 flex items-center justify-center text-[12px] tabular-nums text-foreground">
         {value.toFixed(2)}
       </span>
     </div>

@@ -18,8 +18,8 @@ export function EmptyState({
         className
       )}
     >
-      <p className="text-[13px] text-muted-foreground">{title}</p>
-      {hint && <p className="text-xs text-muted-foreground/80">{hint}</p>}
+      <p className="text-[15px] text-muted-foreground">{title}</p>
+      {hint && <p className="text-[13px] text-muted-foreground/80">{hint}</p>}
     </div>
   )
 }

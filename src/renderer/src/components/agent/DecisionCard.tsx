@@ -28,20 +28,20 @@ export function DecisionCard({
       )}
     >
       <div className="flex items-center gap-2">
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-[13px] text-muted-foreground">
           {formatClock(row.createdAt)}
         </span>
         <ActionBadge action={row.decision?.action ?? 'hold'} />
         {volume != null && (
-          <span className="font-mono text-xs tabular-nums">{formatNum(volume, 2)}</span>
+          <span className="font-mono text-[13px] tabular-nums">{formatNum(volume, 2)}</span>
         )}
-        <span className="ml-auto text-[13px]">{kindIcon(kind)}</span>
+        <span className="ml-auto text-[15px]">{kindIcon(kind)}</span>
       </div>
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p className="mt-1 text-[13px] text-muted-foreground">
         置信度 {(row.decision?.confidence ?? 0).toFixed(2)}
         {kind === 'sent' ? ' · 已成交' : kind === 'reject' ? ' · 被拒绝' : ''}
       </p>
-      <p className="mt-1 truncate text-[13px] text-foreground/90">{reasoning}</p>
+      <p className="mt-1 line-clamp-2 text-[15px] leading-6 text-foreground/90">{reasoning}</p>
     </button>
   )
 }

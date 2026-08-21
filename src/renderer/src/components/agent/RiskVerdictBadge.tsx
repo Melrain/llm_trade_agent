@@ -13,13 +13,13 @@ export function RiskVerdictBadge({
 }): JSX.Element {
   if (verdict === 'pass') {
     return (
-      <Badge className="rounded-md border-transparent bg-emerald-500/15 text-[11px] text-emerald-400">
+      <Badge className="rounded-md border-transparent bg-emerald-500/15 text-[13px] text-emerald-400">
         风控通过
       </Badge>
     )
   }
   return (
-    <Badge className="rounded-md border-transparent bg-red-500 text-[11px] text-white">
+    <Badge className="rounded-md border-transparent bg-red-500 text-[13px] text-white">
       风控拒绝{reason ? ` · ${reason}` : ''}
     </Badge>
   )
@@ -37,7 +37,7 @@ export function ActionBadge({ action }: { action: string }): JSX.Element {
             ? { label: '改止损止盈', className: 'bg-amber-500/15 text-amber-400' }
             : { label: '观望', className: 'bg-muted text-muted-foreground' }
   return (
-    <Badge className={cn('rounded-md border-transparent text-[11px]', meta.className)}>
+    <Badge className={cn('rounded-md border-transparent text-[13px]', meta.className)}>
       {meta.label}
     </Badge>
   )

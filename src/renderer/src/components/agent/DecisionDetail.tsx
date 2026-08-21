@@ -53,15 +53,15 @@ export function DecisionDetail({ row }: { row: AgentRecord | null }): JSX.Elemen
   const factors = row.decision?.keyFactors ?? []
 
   return (
-    <div className="flex h-full flex-col overflow-auto p-4">
+    <div className="flex h-full w-full flex-col overflow-auto p-5">
       <div className="flex items-start gap-3">
         <ActionBadge action={action} />
-        <ConfidenceRing value={confidence} size={44} />
+        <ConfidenceRing value={confidence} size={52} />
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-[15px] text-muted-foreground">
             {formatTime(row.createdAt)} · {row.model}
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
             {row.promptVersion}
             {row.tokens ? ` · ${row.tokens.total} tokens` : ''}
           </p>
@@ -70,7 +70,7 @@ export function DecisionDetail({ row }: { row: AgentRecord | null }): JSX.Elemen
 
       <Section title="① 它看到了什么">
         {snapshot ? (
-          <div className="space-y-1.5 text-[13px] text-muted-foreground">
+          <div className="space-y-1.5 text-[15px] leading-relaxed text-muted-foreground">
             <p>
               价格 {formatNum(snapshot.technical?.price.mid)} · 点差{' '}
               {formatNum(snapshot.technical?.price.spread)} · 新闻 {snapshot.news.length} · 日历{' '}
@@ -82,42 +82,42 @@ export function DecisionDetail({ row }: { row: AgentRecord | null }): JSX.Elemen
               {snapshot.technical?.timeframes.D1?.trend ?? '—'}
             </p>
             <details>
-              <summary className="cursor-pointer text-xs hover:text-foreground">
+              <summary className="cursor-pointer text-[13px] hover:text-foreground">
                 查看完整快照 JSON
               </summary>
-              <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-background p-2 text-[11px] leading-relaxed">
+              <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-background p-2 text-[13px] leading-relaxed">
                 {JSON.stringify(snapshot, null, 2)}
               </pre>
             </details>
           </div>
         ) : (
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-[15px] text-muted-foreground">
             快照 #{row.snapshotId.slice(0, 8)} 已不在内存中，仅保留决策记录。
           </p>
         )}
       </Section>
 
       <Section title="② 它怎么想">
-        <p className="text-[13px] leading-relaxed text-foreground">{reasoning}</p>
+        <p className="text-[15px] leading-relaxed text-foreground">{reasoning}</p>
         {factors.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {factors.map((factor) => (
               <span
                 key={factor}
-                className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-400/90"
+                className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[13px] text-amber-400/90"
               >
                 {factor}
               </span>
             ))}
           </div>
         )}
-        {row.parseError && <p className="mt-2 text-xs text-red-400">解析：{row.parseError}</p>}
+        {row.parseError && <p className="mt-2 text-[13px] text-red-400">解析：{row.parseError}</p>}
       </Section>
 
       <Section title="③ 风控裁决">
         <RiskVerdictBadge verdict={row.riskVerdict} reason={row.riskReason} />
         {row.sizedVolume != null && (
-          <p className="mt-2 text-[13px] text-muted-foreground">
+          <p className="mt-2 text-[15px] text-muted-foreground">
             模型手数 {row.decision?.volume ?? '—'} → 风控覆盖 {row.sizedVolume} 手
           </p>
         )}
@@ -125,12 +125,12 @@ export function DecisionDetail({ row }: { row: AgentRecord | null }): JSX.Elemen
 
       <Section title="④ 执行结果">
         {row.check && (
-          <p className={checkOk ? 'text-[13px] text-emerald-400' : 'text-[13px] text-red-400'}>
+          <p className={checkOk ? 'text-[15px] text-emerald-400' : 'text-[15px] text-red-400'}>
             order_check {checkOk ? '通过' : `${row.check.retcode} ${row.check.comment}`}
           </p>
         )}
         {row.send && (
-          <p className={sendOk ? 'text-[13px] text-emerald-400' : 'text-[13px] text-red-400'}>
+          <p className={sendOk ? 'text-[15px] text-emerald-400' : 'text-[15px] text-red-400'}>
             order_send {row.send.retcode}
             {row.send.price != null ? ` @ ${row.send.price}` : ''}
             {row.send.order != null ? ` · 单 ${row.send.order}` : ''}
@@ -138,29 +138,29 @@ export function DecisionDetail({ row }: { row: AgentRecord | null }): JSX.Elemen
           </p>
         )}
         {row.execution && (
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-[13px] text-muted-foreground">
             {row.execution.status}
             {row.execution.reason ? ` · ${row.execution.reason}` : ''}
           </p>
         )}
         {!row.check && !row.send && !row.execution && (
-          <p className="text-[13px] text-muted-foreground">未进入发单流程</p>
+          <p className="text-[15px] text-muted-foreground">未进入发单流程</p>
         )}
       </Section>
 
       <Section title="⑤ 后续">
         {row.outcome ? (
           row.outcome.status === 'open' ? (
-            <p className="text-[13px] text-sky-400">持仓中 #{row.outcome.positionId ?? '—'}</p>
+            <p className="text-[15px] text-sky-400">持仓中 #{row.outcome.positionId ?? '—'}</p>
           ) : (
-            <p className="text-[13px]">
+            <p className="text-[15px]">
               已平仓 {row.outcome.closePrice != null ? `@ ${row.outcome.closePrice}` : ''}{' '}
               <PnlText value={row.outcome.pnl} />
               {row.outcome.closedAt ? ` · ${formatTime(row.outcome.closedAt)}` : ''}
             </p>
           )
         ) : (
-          <p className="text-[13px] text-muted-foreground">尚无后续结果</p>
+          <p className="text-[15px] text-muted-foreground">尚无后续结果</p>
         )}
       </Section>
     </div>
@@ -170,7 +170,7 @@ export function DecisionDetail({ row }: { row: AgentRecord | null }): JSX.Elemen
 function Section({ title, children }: { title: string; children: ReactNode }): JSX.Element {
   return (
     <section className="mt-4 border-t border-border pt-3">
-      <h3 className="mb-2 text-xs font-medium text-muted-foreground">{title}</h3>
+      <h3 className="mb-2 text-[14px] font-medium text-muted-foreground">{title}</h3>
       {children}
     </section>
   )

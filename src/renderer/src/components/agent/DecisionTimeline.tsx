@@ -35,7 +35,7 @@ export function DecisionTimeline({
             type="button"
             onClick={() => setFilter(item.id)}
             className={cn(
-              'rounded-md px-2 py-1 text-xs',
+              'rounded-md px-2.5 py-1 text-[13px]',
               filter === item.id
                 ? 'bg-accent text-foreground'
                 : 'text-muted-foreground hover:text-foreground'
