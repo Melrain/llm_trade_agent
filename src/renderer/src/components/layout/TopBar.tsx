@@ -1,0 +1,233 @@
+import { useEffect, useRef, useState, type JSX } from 'react'
+import { Lock } from 'lucide-react'
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { HealthDot } from '@/components/common/HealthDot'
+import { PnlText } from '@/components/common/PnlText'
+import { formatCountdown, formatNum, formatSignedPct, isWeekend, pnlTone } from '@/lib/format'
+import { cn } from '@/lib/utils'
+import { useAgentStore, useAppStore, useMarketStore, useNewsStore } from '@/stores'
+import { accountModeFromTradeMode } from '../../../../preload/mt5-types'
+
+function useNow(intervalMs = 1000): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), intervalMs)
+    return () => window.clearInterval(id)
+  }, [intervalMs])
+  return now
+}
+
+function mt5Status(
+  ready: boolean,
+  lastError: string | null,
+  priceChangedAt: number | null,
+  now: number
+): 'ok' | 'degraded' | 'error' | 'idle' {
+  if (lastError) return 'error'
+  if (!ready) return 'idle'
+  if (priceChangedAt != null && now - priceChangedAt < 10_000) return 'ok'
+  if (isWeekend()) return 'idle'
+  return 'degraded'
+}
+
+export function TopBar(): JSX.Element {
+  const now = useNow()
+  const setActivePage = useAppStore((s) => s.setActivePage)
+  const symbol = useMarketStore((s) => s.symbol)
+  const price = useMarketStore((s) => s.price)
+  const account = useMarketStore((s) => s.account)
+  const ready = useMarketStore((s) => s.ready)
+  const lastError = useMarketStore((s) => s.lastError)
+  const priceChangedAt = useMarketStore((s) => s.priceChangedAt)
+  const h1 = useMarketStore((s) => s.timeframes.H1)
+  const config = useAgentStore((s) => s.config)
+  const records = useAgentStore((s) => s.records)
+  const saving = useAgentStore((s) => s.saving)
+  const running = useAgentStore((s) => s.running)
+  const saveConfig = useAgentStore((s) => s.saveConfig)
+  const calendar = useNewsStore((s) => s.calendar)
+
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [flash, setFlash] = useState<'up' | 'down' | null>(null)
+  const prevMid = useRef<number | null>(null)
+
+  const mid = price?.mid ?? null
+  const change24h = h1?.pctChange24h ?? null
+  const liveMode = accountModeFromTradeMode(account?.tradeMode)
+  const accountMode = liveMode !== 'unknown' ? liveMode : (config?.accountMode ?? 'unknown')
+  const enabled = config?.enabled ?? false
+  const tradingEnabled = config?.tradingEnabled ?? false
+  const lastDecision = records[0] ?? null
+  const intervalMs = config?.intervalMs ?? 15 * 60 * 1000
+  const remainMs =
+    enabled && lastDecision ? Date.parse(lastDecision.createdAt) + intervalMs - now : 0
+  const haltWindow = calendar.some((ev) => ev.soon || ev.inWindow)
+  const mt5 = mt5Status(ready, lastError, priceChangedAt, now)
+  const equity = account?.equity ?? null
+  const profit = account?.profit ?? null
+
+  useEffect(() => {
+    if (mid == null) return
+    const prev = prevMid.current
+    prevMid.current = mid
+    if (prev == null || prev === mid) return
+    setFlash(mid > prev ? 'up' : 'down')
+    const t = window.setTimeout(() => setFlash(null), 300)
+    return () => window.clearTimeout(t)
+  }, [mid])
+
+  return (
+    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-card px-3">
+      <button
+        type="button"
+        onClick={() => setActivePage('chart')}
+        className="flex min-w-[168px] items-baseline gap-2 rounded-md px-1.5 py-1 text-left hover:bg-accent"
+      >
+        <span className="text-xs font-medium text-muted-foreground">{symbol}</span>
+        <span
+          className={cn(
+            'font-mono text-[15px] font-semibold tabular-nums',
+            flash === 'up' && 'text-emerald-400',
+            flash === 'down' && 'text-red-400'
+          )}
+        >
+          {formatNum(mid)}
+        </span>
+        <span className={cn('text-xs tabular-nums', pnlTone(change24h))}>
+          {change24h != null && change24h > 0 ? '▲' : change24h != null && change24h < 0 ? '▼' : ''}
+          {formatSignedPct(change24h)}
+        </span>
+      </button>
+
+      <div className="h-5 w-px bg-border" />
+
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <HealthDot status={enabled ? 'ok' : 'idle'} pulse={enabled} className="size-2" />
+        <span className="text-[13px] text-foreground">
+          {running ? '决策中' : enabled ? 'Agent 运行中' : 'Agent 已停止'}
+        </span>
+        {enabled && lastDecision && (
+          <span className="text-xs text-muted-foreground">
+            · 下次决策 {remainMs > 0 ? formatCountdown(remainMs) : '即将'}
+          </span>
+        )}
+        {enabled && !lastDecision && (
+          <span className="text-xs text-muted-foreground">· 等待首次决策</span>
+        )}
+        {haltWindow && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex text-amber-400">
+                <Lock className="size-3.5" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>高影响事件窗口，暂停开仓</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            'text-xs font-medium',
+            tradingEnabled ? 'text-amber-400' : 'text-muted-foreground'
+          )}
+        >
+          {tradingEnabled ? '实弹' : '自动交易'}
+        </span>
+        <Switch
+          size="sm"
+          checked={tradingEnabled}
+          disabled={saving || !config}
+          className={cn(tradingEnabled && 'data-[state=checked]:bg-amber-500')}
+          onCheckedChange={(on) => {
+            if (on) setConfirmOpen(true)
+            else void saveConfig({ tradingEnabled: false })
+          }}
+        />
+      </div>
+
+      <div className="h-5 w-px bg-border" />
+
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">净值</span>
+        <span className="font-mono text-[13px] font-medium tabular-nums">
+          {formatMoneyish(equity)}
+        </span>
+        <PnlText value={profit} withIcon className="text-xs" />
+      </div>
+
+      <AccountBadge mode={accountMode} />
+
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span>MT5</span>
+        <HealthDot status={mt5} />
+      </div>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>打开自动交易总闸？</AlertDialogTitle>
+            <AlertDialogDescription>
+              {accountMode === 'demo'
+                ? '将允许在当前 Demo 账户自动下单。这是高危操作。'
+                : '将打开自动下单总闸。当前账户不是 Demo 时引擎不会真正发单，但仍请确认你了解风险。'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-500 text-black hover:bg-amber-400"
+              onClick={() => void saveConfig({ tradingEnabled: true })}
+            >
+              确认开启
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </header>
+  )
+}
+
+function formatMoneyish(value: number | null): string {
+  if (value == null) return '—'
+  return `$${formatNum(value)}`
+}
+
+function AccountBadge({ mode }: { mode: 'demo' | 'real' | 'unknown' }): JSX.Element {
+  if (mode === 'real') {
+    return (
+      <Badge className="rounded-md border-transparent bg-red-500 px-1.5 text-[10px] text-white">
+        REAL
+      </Badge>
+    )
+  }
+  if (mode === 'demo') {
+    return (
+      <Badge
+        variant="outline"
+        className="rounded-md border-cyan-400/80 px-1.5 text-[10px] text-cyan-300"
+      >
+        DEMO
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="secondary" className="rounded-md px-1.5 text-[10px] text-muted-foreground">
+      未知
+    </Badge>
+  )
+}

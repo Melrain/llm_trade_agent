@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "feeds": [
+    {
+      "source": "forexlive",
+      "sourceZh": "外汇直播",
+      "url": "https://www.forexlive.com/feed",
+      "enabled": true
+    },
+    {
+      "source": "fxstreet",
+      "sourceZh": "外汇街",
+      "url": "https://www.fxstreet.com/rss/news",
+      "enabled": true
+    }
+  ]
+}

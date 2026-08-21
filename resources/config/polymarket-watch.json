@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "http": {
+    "gammaBase": "https://gamma-api.polymarket.com",
+    "clobBase": "https://clob.polymarket.com",
+    "timeoutMs": 20000,
+    "retries": 2,
+    "userAgent": "LLA-Market-Desktop/0.1"
+  },
+  "pollIntervalMs": 60000,
+  "resolveIntervalMs": 86400000,
+  "spotIntervalMs": 1000,
+  "instruments": [
+    {
+      "symbol": "XAUUSD",
+      "displayName": "黄金",
+      "enabled": true,
+      "markets": [
+        {
+          "id": "xau-monthly-hit",
+          "discover": {
+            "kind": "monthly_price_hit",
+            "slugTemplate": "what-price-will-xauusd-hit-in-{month}-{year}",
+            "queries": ["XAUUSD hit"]
+          },
+          "role": "price_target",
+          "primary": true,
+          "outcome": "Yes",
+          "notes": "滚动发现当月黄金触及价；本月关闭后自动切下月。"
+        },
+        {
+          "id": "fed-next",
+          "discover": {
+            "kind": "next_fed_decision",
+            "queries": ["Fed Decision"],
+            "slugIncludes": "fed-decision-in-"
+          },
+          "role": "macro",
+          "primary": false,
+          "outcome": "Yes",
+          "notes": "滚动发现下一场仍在交易的 FOMC 决议。"
+        },
+        {
+          "id": "geo-gold",
+          "discover": {
+            "kind": "gold_geopolitics",
+            "queries": ["iran", "israel", "strait of hormuz", "china taiwan", "russia ukraine"],
+            "maxEvents": 5
+          },
+          "role": "geopolitics",
+          "primary": false,
+          "outcome": "Yes",
+          "titleZh": "地缘政治",
+          "notes": "黄金相关高成交地缘盘：美伊停火、霍尔木兹、打伊朗、打台湾、俄乌停火。"
+        }
+      ]
+    }
+  ]
+}
