@@ -6,6 +6,10 @@ LLM Trade Agent **桌面客户端**（Electron · React · TypeScript）。
 - 开发期 Vite HMR
 - 打包使用 electron-builder
 
+## 许可证
+
+本项目以 [MIT License](./LICENSE) 开源。欢迎阅读源码、自行构建，以及审计每一条风控规则。
+
 ## 启动
 
 ```bash

@@ -1,10 +1,11 @@
 {
   "name": "llm_trade_agent",
   "version": "0.1.0",
-  "private": true,
-  "description": "LLM Trade Agent desktop client (Electron · React · TypeScript)",
+  "private": false,
+  "license": "MIT",
+  "description": "LLM智能体 desktop client (Electron · React · TypeScript)",
   "main": "./out/main/index.js",
-  "author": "LLM Trade Agent",
+  "author": "LLM智能体",
   "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --write .",
