@@ -20,12 +20,8 @@ export function decideSendGate(input: {
   if (!input.tradingEnabled) {
     return { send: false, status: 'preview', reason: '总闸关闭' }
   }
-  if (input.accountMode !== 'demo') {
-    return {
-      send: false,
-      status: 'skipped',
-      reason: input.accountMode === 'real' ? '实盘禁止发单' : '账户类型未知，禁止发单'
-    }
+  if (input.accountMode === 'unknown') {
+    return { send: false, status: 'skipped', reason: '账户类型未知，禁止发单' }
   }
   if (!isCheckOk(input.checkRetcode)) {
     return { send: false, status: 'rejected', reason: '经纪商检查未通过' }

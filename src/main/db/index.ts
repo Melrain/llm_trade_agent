@@ -4,7 +4,6 @@ import { app } from 'electron'
 import Database from 'better-sqlite3'
 
 import { peekDb, setDb, closeDb as closeConnection, type AppDatabase } from './connection'
-import { unwatchAllJsonFiles } from './file-watch'
 import { migrateLegacyFiles } from './migrate-files'
 import { SCHEMA_SQL, SCHEMA_VERSION } from './schema'
 import { seedKvDefaults } from './seed'
@@ -41,6 +40,5 @@ function applySchema(instance: AppDatabase): void {
 }
 
 export function closeDb(): void {
-  unwatchAllJsonFiles()
   closeConnection()
 }

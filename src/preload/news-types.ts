@@ -21,6 +21,7 @@ export type CalendarEvent = {
   forecast: string | null
   previous: string | null
   actual: string | null
+  /** 高影响事件处于禁开仓窗口（前后 15 分钟） */
   inWindow: boolean
   soon: boolean
 }
@@ -43,7 +44,6 @@ export type NewsApi = {
   getSnapshot: () => Promise<NewsSnapshot>
   refresh: () => Promise<NewsSnapshot>
   listFeeds: () => Promise<NewsFeedInfo[]>
-  openFeedsConfig: () => Promise<string>
   openUrl: (url: string) => Promise<void>
   onUpdated: (callback: (snapshot: NewsSnapshot) => void) => () => void
 }

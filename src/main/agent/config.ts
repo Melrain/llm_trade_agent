@@ -4,6 +4,7 @@ import type { AgentPublicConfig } from '../../preload/agent-types'
 import type { AccountMode } from '../../preload/mt5-types'
 import { getKvJson, setKv } from '../db/kv'
 import { KV_KEYS } from '../db/schema'
+import { armAccount, shouldDisarmTrading } from './account-guard'
 
 export const DEFAULT_BASE_URL = 'https://api.deepseek.com/v1'
 export const DEFAULT_MODEL = 'deepseek-v4-pro'
@@ -26,6 +27,8 @@ type StoredConfig = {
   maxVolume: number
   riskPct: number
   fixedVolume: number | null
+  armedLogin: number | null
+  armedMode: 'demo' | 'real' | null
 }
 
 function clampMaxVolume(value: number): number {
@@ -52,7 +55,9 @@ function defaults(): StoredConfig {
     apiKeyEnc: null,
     maxVolume: DEFAULT_MAX_VOLUME,
     riskPct: DEFAULT_RISK_PCT,
-    fixedVolume: null
+    fixedVolume: null,
+    armedLogin: null,
+    armedMode: null
   }
 }
 
@@ -73,8 +78,8 @@ function normalizeStored(parsed: Partial<StoredConfig>): StoredConfig {
       typeof parsed.intervalMs === 'number' && parsed.intervalMs >= 60_000
         ? parsed.intervalMs
         : base.intervalMs,
-    enabled: parsed.enabled === true,
     tradingEnabled: parsed.tradingEnabled === true,
+    enabled: parsed.enabled === true || parsed.tradingEnabled === true,
     apiKeyEnc: typeof parsed.apiKeyEnc === 'string' ? parsed.apiKeyEnc : null,
     maxVolume:
       typeof parsed.maxVolume === 'number' ? clampMaxVolume(parsed.maxVolume) : base.maxVolume,
@@ -89,7 +94,9 @@ function normalizeStored(parsed: Partial<StoredConfig>): StoredConfig {
                 ? clampMaxVolume(parsed.maxVolume)
                 : base.maxVolume
             )
-          : null
+          : null,
+    armedLogin: typeof parsed.armedLogin === 'number' ? parsed.armedLogin : null,
+    armedMode: parsed.armedMode === 'demo' || parsed.armedMode === 'real' ? parsed.armedMode : null
   }
 }
 
@@ -168,7 +175,8 @@ export function setConfig(
     riskPct?: number
     fixedVolume?: number | null
   },
-  accountMode: AccountMode = 'unknown'
+  accountMode: AccountMode = 'unknown',
+  login: number | null = null
 ): AgentPublicConfig {
   const cfg = readStored()
   if (typeof patch.baseUrl === 'string' && patch.baseUrl.trim()) {
@@ -185,9 +193,33 @@ export function setConfig(
   }
   if (typeof patch.enabled === 'boolean') {
     cfg.enabled = patch.enabled
+    if (!patch.enabled) {
+      cfg.tradingEnabled = false
+      cfg.armedLogin = null
+      cfg.armedMode = null
+    }
   }
   if (typeof patch.tradingEnabled === 'boolean') {
-    cfg.tradingEnabled = patch.tradingEnabled
+    if (patch.tradingEnabled) {
+      const armed = armAccount(login, accountMode)
+      if (armed.armedMode == null || armed.armedLogin == null) {
+        cfg.tradingEnabled = false
+        cfg.armedLogin = null
+        cfg.armedMode = null
+      } else {
+        cfg.tradingEnabled = true
+        cfg.enabled = true
+        cfg.armedLogin = armed.armedLogin
+        cfg.armedMode = armed.armedMode
+      }
+    } else {
+      cfg.tradingEnabled = false
+      cfg.armedLogin = null
+      cfg.armedMode = null
+    }
+  }
+  if (cfg.tradingEnabled) {
+    cfg.enabled = true
   }
   if (typeof patch.maxVolume === 'number') {
     cfg.maxVolume = clampMaxVolume(patch.maxVolume)
@@ -209,4 +241,27 @@ export function setConfig(
   }
   writeStored(cfg)
   return getPublicConfig(accountMode)
+}
+
+export function disarmIfAccountDrift(current: {
+  login: number | null
+  mode: AccountMode
+}): boolean {
+  const cfg = readStored()
+  if (
+    !shouldDisarmTrading({
+      tradingEnabled: cfg.tradingEnabled,
+      armedLogin: cfg.armedLogin,
+      armedMode: cfg.armedMode,
+      currentLogin: current.login,
+      currentMode: current.mode
+    })
+  ) {
+    return false
+  }
+  cfg.tradingEnabled = false
+  cfg.armedLogin = null
+  cfg.armedMode = null
+  writeStored(cfg)
+  return true
 }

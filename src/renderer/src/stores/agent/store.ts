@@ -39,6 +39,9 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
       window.api.agent.onUpdated((records) => {
         get().applyRecords(records)
       })
+      window.api.agent.onConfig((config) => {
+        set({ config })
+      })
     }
     try {
       const [records, config] = await Promise.all([

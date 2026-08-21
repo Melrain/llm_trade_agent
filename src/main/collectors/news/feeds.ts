@@ -1,9 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { dirname, join } from 'path'
-import { app, shell } from 'electron'
+import { existsSync, readFileSync } from 'fs'
+import { join } from 'path'
+import { app } from 'electron'
 
-import { markWriting, unwatchJsonFile, watchJsonFile } from '../../db/file-watch'
-import { getKv, getKvJson, setKv } from '../../db/kv'
+import { getKvJson, setKv } from '../../db/kv'
 import { KV_KEYS } from '../../db/schema'
 import type { RssFeed } from './rss'
 
@@ -31,8 +30,6 @@ const DEFAULT_FEEDS: NewsFeedInfo[] = [
   }
 ]
 
-const listeners = new Set<() => void>()
-
 function defaultFeedsPath(): string {
   if (app.isPackaged) {
     const extra = join(process.resourcesPath, 'config', 'news-feeds.json')
@@ -41,10 +38,6 @@ function defaultFeedsPath(): string {
   const fromApp = join(app.getAppPath(), 'resources', 'config', 'news-feeds.json')
   if (existsSync(fromApp)) return fromApp
   return join(__dirname, '../../resources/config/news-feeds.json')
-}
-
-function userFeedsPath(): string {
-  return join(app.getPath('userData'), 'news-feeds.json')
 }
 
 function asString(v: unknown, fallback: string): string {
@@ -76,15 +69,6 @@ export function parseFeedsDocument(raw: unknown): NewsFeedInfo[] {
   const rows = Array.isArray(parsed.feeds) ? parsed.feeds.map(parseFeed) : []
   if (rows.length === 0) throw new Error('feeds 为空')
   return rows
-}
-
-function notifyFeedsChanged(): void {
-  for (const listener of listeners) listener()
-}
-
-export function onNewsFeedsChanged(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
 }
 
 function readBundledFeeds(): unknown | null {
@@ -125,44 +109,4 @@ export function listEnabledFeeds(): RssFeed[] {
   return loadNewsFeeds()
     .filter((feed) => feed.enabled)
     .map(({ source, sourceZh, url }) => ({ source, sourceZh, url }))
-}
-
-function exportFeedsFile(): string {
-  const path = userFeedsPath()
-  const raw = getKvJson<unknown>(KV_KEYS.newsFeeds) ?? {
-    version: 1,
-    feeds: loadNewsFeeds()
-  }
-  mkdirSync(dirname(path), { recursive: true })
-  markWriting(path, true)
-  try {
-    writeFileSync(path, `${JSON.stringify(raw, null, 2)}\n`)
-  } finally {
-    markWriting(path, false)
-  }
-  return path
-}
-
-function importFeedsFile(path: string): void {
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown
-    parseFeedsDocument(parsed)
-    if (JSON.stringify(parsed) === getKv(KV_KEYS.newsFeeds)) return
-    setKv(KV_KEYS.newsFeeds, parsed)
-    notifyFeedsChanged()
-  } catch (error) {
-    console.warn('[news] feeds reimport', error instanceof Error ? error.message : error)
-  }
-}
-
-export async function openNewsFeedsConfig(): Promise<string> {
-  const path = exportFeedsFile()
-  watchJsonFile(path, importFeedsFile)
-  const err = await shell.openPath(path)
-  if (err) throw new Error(err)
-  return path
-}
-
-export function stopNewsFeedsWatch(): void {
-  unwatchJsonFile(userFeedsPath())
 }

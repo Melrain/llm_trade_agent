@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": false,
   "license": "MIT",
-  "description": "LLM智能体 desktop client (Electron · React · TypeScript)",
+  "description": "LLMTradeAgent desktop client (Electron · React · TypeScript)",
   "main": "./out/main/index.js",
-  "author": "LLM智能体",
-  "homepage": "https://electron-vite.org",
+  "author": "LLMTradeAgent",
+  "homepage": "https://github.com/Melrain/llm_trade_agent",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -18,7 +18,7 @@
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
     "prepare:mt5-runtime": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-mt5-runtime.ps1",
-    "build:unpack": "npm run build && electron-builder --dir",
+    "build:unpack": "npm run prepare:mt5-runtime && npm run build && electron-builder --dir",
     "build:win": "npm run prepare:mt5-runtime && npm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux"

@@ -2,7 +2,6 @@ import { BrowserWindow, ipcMain, shell } from 'electron'
 
 import type { PmSnapshot } from '../../../preload/pm-types'
 import type { PolymarketCollector } from './collector'
-import { openWatchConfig } from './config'
 
 function assertSymbol(symbol: unknown): string {
   if (symbol == null || symbol === '') return 'XAUUSD'
@@ -28,12 +27,7 @@ function broadcast(snapshot: PmSnapshot): void {
 export function registerPmIpc(collector: PolymarketCollector): void {
   collector.onUpdated(broadcast)
 
-  for (const channel of [
-    'pm:getSnapshot',
-    'pm:refresh',
-    'pm:openEvent',
-    'pm:openWatchConfig'
-  ] as const) {
+  for (const channel of ['pm:getSnapshot', 'pm:refresh', 'pm:openEvent'] as const) {
     ipcMain.removeHandler(channel)
   }
 
@@ -45,5 +39,4 @@ export function registerPmIpc(collector: PolymarketCollector): void {
     const url = `https://polymarket.com/event/${assertSlug(slug)}`
     await shell.openExternal(url)
   })
-  ipcMain.handle('pm:openWatchConfig', () => openWatchConfig())
 }

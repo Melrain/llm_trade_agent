@@ -43,7 +43,7 @@ export function CalendarList({
               const impact = impactMeta(event.impact)
               const whenMs = Date.parse(event.when)
               const released = whenMs < now
-              const highlight = event.soon || event.inWindow
+              const highlight = event.impact === 'high' && event.soon
               const remain = whenMs - now
               return (
                 <li

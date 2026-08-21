@@ -79,11 +79,36 @@ assert.equal(openOnly.length, 1)
 assert.equal(openOnly[0].outcome?.status, 'open')
 assert.equal(openOnly[0].outcome?.pnl, null)
 
-// 已回写 closed 的记录不再更新
+// 已回写且时间合理的 closed 记录不再更新
 const already = sentOpen({
-  outcome: { status: 'closed', positionId: 500, closedAt: 'x', closePrice: 4480, pnl: -5.7 }
+  outcome: {
+    status: 'closed',
+    positionId: 500,
+    closedAt: new Date(1_760_003_600 * 1000).toISOString(),
+    closePrice: 4480,
+    pnl: -5.7
+  }
 })
 assert.equal(reconcileOutcomes([already], closedDeals).length, 0)
+
+// bridge 输出毫秒成交时间
+const closedDealsMs = closedDeals.map((d) => ({ ...d, time: d.time * 1000 }))
+const fromMs = reconcileOutcomes([sentOpen()], closedDealsMs)
+assert.equal(fromMs[0].outcome?.closedAt, new Date(1_760_003_600 * 1000).toISOString())
+
+// 误把毫秒再 *1000 的旧 closedAt 会重写
+const bogus = sentOpen({
+  outcome: {
+    status: 'closed',
+    positionId: 500,
+    closedAt: new Date(1_760_003_600 * 1_000_000).toISOString(),
+    closePrice: 4480,
+    pnl: -5.7
+  }
+})
+const repaired = reconcileOutcomes([bogus], closedDealsMs)
+assert.equal(repaired.length, 1)
+assert.equal(repaired[0].outcome?.closedAt, new Date(1_760_003_600 * 1000).toISOString())
 
 // send.deal 缺失时按 order 匹配
 const byOrder = reconcileOutcomes(

@@ -4,7 +4,7 @@ import type { MarketApi, MarketSnapshot } from './market-types'
 import type { Mt5Api, Mt5Filter, Mt5Timeframe, Mt5TradeRequest } from './mt5-types'
 import type { NewsApi, NewsSnapshot } from './news-types'
 import type { PmApi, PmSnapshot } from './pm-types'
-import type { AgentApi, AgentConfigPatch, AgentRecord } from './agent-types'
+import type { AgentApi, AgentConfigPatch, AgentPublicConfig, AgentRecord } from './agent-types'
 import type { SnapshotApi, DecisionSnapshot } from './snapshot-types'
 
 const api: {
@@ -45,7 +45,6 @@ const api: {
     getSnapshot: (symbol?: string) => ipcRenderer.invoke('pm:getSnapshot', symbol),
     refresh: (symbol?: string) => ipcRenderer.invoke('pm:refresh', symbol),
     openEvent: (slug: string) => ipcRenderer.invoke('pm:openEvent', slug),
-    openWatchConfig: () => ipcRenderer.invoke('pm:openWatchConfig'),
     onUpdated: (callback: (snapshot: PmSnapshot) => void) => {
       const listener = (_event: unknown, snapshot: PmSnapshot): void => {
         callback(snapshot)
@@ -73,7 +72,6 @@ const api: {
     getSnapshot: () => ipcRenderer.invoke('news:getSnapshot'),
     refresh: () => ipcRenderer.invoke('news:refresh'),
     listFeeds: () => ipcRenderer.invoke('news:listFeeds'),
-    openFeedsConfig: () => ipcRenderer.invoke('news:openFeedsConfig'),
     openUrl: (url: string) => ipcRenderer.invoke('news:openUrl', url),
     onUpdated: (callback: (snapshot: NewsSnapshot) => void) => {
       const listener = (_event: unknown, snapshot: NewsSnapshot): void => {
@@ -112,6 +110,15 @@ const api: {
       ipcRenderer.on('agent:updated', listener)
       return () => {
         ipcRenderer.removeListener('agent:updated', listener)
+      }
+    },
+    onConfig: (callback: (config: AgentPublicConfig) => void) => {
+      const listener = (_event: unknown, config: AgentPublicConfig): void => {
+        callback(config)
+      }
+      ipcRenderer.on('agent:config', listener)
+      return () => {
+        ipcRenderer.removeListener('agent:config', listener)
       }
     }
   }

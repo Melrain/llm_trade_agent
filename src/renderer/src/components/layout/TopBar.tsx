@@ -19,6 +19,7 @@ import { PnlText } from '@/components/common/PnlText'
 import { formatCountdown, formatNum, formatSignedPct, isWeekend, pnlTone } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAgentStore, useAppStore, useMarketStore, useNewsStore } from '@/stores'
+import { HOLDING_INTERVAL_MS } from '../../../../preload/agent-types'
 import { accountModeFromTradeMode } from '../../../../preload/mt5-types'
 
 function useNow(intervalMs = 1000): number {
@@ -49,6 +50,7 @@ export function TopBar(): JSX.Element {
   const symbol = useMarketStore((s) => s.symbol)
   const price = useMarketStore((s) => s.price)
   const account = useMarketStore((s) => s.account)
+  const positions = useMarketStore((s) => s.positions)
   const ready = useMarketStore((s) => s.ready)
   const lastError = useMarketStore((s) => s.lastError)
   const priceChangedAt = useMarketStore((s) => s.priceChangedAt)
@@ -62,6 +64,7 @@ export function TopBar(): JSX.Element {
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [needKeyOpen, setNeedKeyOpen] = useState(false)
+  const [needAccountOpen, setNeedAccountOpen] = useState(false)
   const [flash, setFlash] = useState<'up' | 'down' | null>(null)
   const prevMid = useRef<number | null>(null)
 
@@ -73,9 +76,10 @@ export function TopBar(): JSX.Element {
   const tradingEnabled = config?.tradingEnabled ?? false
   const lastDecision = records[0] ?? null
   const intervalMs = config?.intervalMs ?? 15 * 60 * 1000
+  const effectiveMs = positions.length > 0 ? Math.min(HOLDING_INTERVAL_MS, intervalMs) : intervalMs
   const remainMs =
-    enabled && lastDecision ? Date.parse(lastDecision.createdAt) + intervalMs - now : 0
-  const haltWindow = calendar.some((ev) => ev.soon || ev.inWindow)
+    enabled && lastDecision ? Date.parse(lastDecision.createdAt) + effectiveMs - now : 0
+  const haltWindow = calendar.some((ev) => ev.impact === 'high' && ev.soon)
   const mt5 = mt5Status(ready, lastError, priceChangedAt, now)
   const equity = account?.equity ?? null
   const profit = account?.profit ?? null
@@ -103,6 +107,10 @@ export function TopBar(): JSX.Element {
         }
         if (!config?.hasApiKey) {
           setNeedKeyOpen(true)
+          return
+        }
+        if (accountMode === 'unknown') {
+          setNeedAccountOpen(true)
           return
         }
         setConfirmOpen(true)
@@ -211,21 +219,36 @@ export function TopBar(): JSX.Element {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={needAccountOpen} onOpenChange={setNeedAccountOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>尚未识别账户类型</AlertDialogTitle>
+            <AlertDialogDescription>
+              请先打开并登录 MetaTrader 5，等顶栏出现 DEMO 或 REAL
+              后再打开自动交易。账户切换后总闸也会自动关闭，需要重新确认。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setNeedAccountOpen(false)}>知道了</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>打开自动交易总闸？</AlertDialogTitle>
             <AlertDialogDescription>
-              {accountMode === 'demo'
-                ? '将允许在当前 Demo 账户自动下单。这是高危操作。'
-                : '将打开自动下单总闸。当前账户不是 Demo 时引擎不会真正发单，但仍请确认你了解风险。'}
+              {accountMode === 'real'
+                ? '当前是 REAL 实盘账户。打开后将用真实资金自动下单，可能造成本金亏损。请确认手数与风险上限已经设好。'
+                : '将同时启动 Agent 决策循环，并允许在当前 Demo 账户自动下单。这是高危操作。'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               className="bg-amber-500 text-black hover:bg-amber-400"
-              onClick={() => void saveConfig({ tradingEnabled: true })}
+              onClick={() => void saveConfig({ tradingEnabled: true, enabled: true })}
             >
               确认开启
             </AlertDialogAction>

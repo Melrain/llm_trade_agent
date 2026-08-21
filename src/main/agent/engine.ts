@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 
 import {
   AGENT_MAGIC,
+  HOLDING_INTERVAL_MS,
   type AgentDecision,
   type AgentExecution,
   type AgentOrderCheck,
@@ -23,7 +24,7 @@ import type { DecisionSnapshot } from '../../preload/snapshot-types'
 import type { Mt5Client } from '../mt5/client'
 import type { SnapshotService } from '../snapshot/service'
 import { chatCompletions } from './client'
-import { getApiKey, getPublicConfig } from './config'
+import { disarmIfAccountDrift, getApiKey, getPublicConfig } from './config'
 import { decideSendGate, isCheckOk } from './gate'
 import { notify } from './notify'
 import { buildTradeRequest, withFilling } from './order-builder'
@@ -33,20 +34,19 @@ import {
   renderRecentDecisions,
   renderSnapshotMarkdown
 } from './prompt'
-import { reconcileOutcomes } from './reconcile'
+import { closedAtLooksWrong, reconcileOutcomes } from './reconcile'
 import { evaluateRisk } from './risk'
 import { DecisionParseError, parseDecision, retryHint } from './schema'
 import { appendSnapshotLog } from './snapshot-store'
 import { appendRecord, loadRecords, updateStoredRecords } from './store'
 
 type Listener = (records: AgentRecord[]) => void
+type ConfigListener = () => void
 
 const CHECK_TIMEOUT_MS = 20_000
 const SEND_TIMEOUT_MS = 60_000
 /** 决策调度器每 30s 检查一次是否到期 */
 const SCHEDULER_TICK_MS = 30_000
-/** 有持仓时决策周期加密到 5 分钟 */
-const HOLDING_INTERVAL_MS = 5 * 60_000
 const RECONCILE_MS = 60_000
 /** 盈利超过 1×H1 ATR 后把止损移到入场价 */
 const BREAKEVEN_ATR = 1
@@ -116,6 +116,8 @@ function asCheck(raw: unknown): AgentOrderCheck {
 export class AgentEngine {
   private records: AgentRecord[] = []
   private readonly listeners = new Set<Listener>()
+  private readonly configListeners = new Set<ConfigListener>()
+  private offSnapshot: (() => void) | null = null
   private timer: NodeJS.Timeout | null = null
   private reconcileTimer: NodeJS.Timeout | null = null
   private running = false
@@ -133,6 +135,7 @@ export class AgentEngine {
     if (this.started) return
     this.started = true
     this.records = loadRecords()
+    this.offSnapshot = this.snapshots.onUpdated((snapshot) => this.guardArmedAccount(snapshot))
     this.syncTimer('start')
     this.reconcileTimer = setInterval(() => {
       void this.reconcileTick()
@@ -144,11 +147,20 @@ export class AgentEngine {
     this.timer = null
     if (this.reconcileTimer) clearInterval(this.reconcileTimer)
     this.reconcileTimer = null
+    this.offSnapshot?.()
+    this.offSnapshot = null
     this.started = false
   }
 
   list(): AgentRecord[] {
     return this.records
+  }
+
+  onConfig(listener: ConfigListener): () => void {
+    this.configListeners.add(listener)
+    return () => {
+      this.configListeners.delete(listener)
+    }
   }
 
   onUpdated(listener: Listener): () => void {
@@ -191,7 +203,8 @@ export class AgentEngine {
         console.warn('[agent]', message)
       })
     }, SCHEDULER_TICK_MS)
-    const when = this.lastRunAt === 0 ? 'due-soon' : `last=${new Date(this.lastRunAt).toISOString()}`
+    const when =
+      this.lastRunAt === 0 ? 'due-soon' : `last=${new Date(this.lastRunAt).toISOString()}`
     this.logTimer(`scheduler on interval=${Math.round(cfg.intervalMs / 60_000)}m ${when}`)
   }
 
@@ -386,6 +399,7 @@ export class AgentEngine {
     let send: AgentOrderSend | null = null
     let execution: AgentExecution = { status: 'preview', reason: '总闸关闭' }
 
+    this.guardArmedAccount(snapshot)
     const cfg = getPublicConfig(accountModeFromTradeMode(snapshot.account?.tradeMode))
 
     if (record.riskVerdict === 'pass' && record.decision.action !== 'hold' && !record.skipped) {
@@ -399,9 +413,11 @@ export class AgentEngine {
         const checked = await this.checkWithFillFallback(intendedRequest, snapshot)
         intendedRequest = checked.request
         check = checked.check
+        this.guardArmedAccount(snapshot)
+        const liveCfg = getPublicConfig(accountModeFromTradeMode(snapshot.account?.tradeMode))
         const gate = decideSendGate({
-          tradingEnabled: cfg.tradingEnabled,
-          accountMode: cfg.accountMode,
+          tradingEnabled: liveCfg.tradingEnabled,
+          accountMode: liveCfg.accountMode,
           checkRetcode: check.retcode
         })
         if (gate.send) {
@@ -517,12 +533,12 @@ export class AgentEngine {
 
   /** 用 history_deals 把已发单开仓的平仓结果回写到决策记录 */
   private async reconcileOutcomesOnce(): Promise<void> {
-    const pending = this.records.filter(
-      (row) =>
-        row.execution?.status === 'sent' &&
-        (row.decision.action === 'open_buy' || row.decision.action === 'open_sell') &&
-        row.outcome?.status !== 'closed'
-    )
+    const pending = this.records.filter((row) => {
+      if (row.execution?.status !== 'sent') return false
+      const { action } = row.decision
+      if (action !== 'open_buy' && action !== 'open_sell') return false
+      return row.outcome?.status !== 'closed' || closedAtLooksWrong(row.outcome.closedAt)
+    })
     if (pending.length === 0) return
 
     const earliest = Math.min(...pending.map((row) => Date.parse(row.createdAt)))
@@ -555,11 +571,12 @@ export class AgentEngine {
     }
   }
 
-  /** 盈利超过 1×H1 ATR 后把 SL 移到入场价（只动本引擎的仓，且总闸开 + Demo） */
+  /** 盈利超过 1×H1 ATR 后把 SL 移到入场价（只动本引擎的仓，且总闸开；账户类型未知时不改仓） */
   private async manageBreakeven(): Promise<void> {
     const snapshot = this.snapshots.getSnapshot()
+    this.guardArmedAccount(snapshot)
     const cfg = getPublicConfig(accountModeFromTradeMode(snapshot.account?.tradeMode))
-    if (!cfg.tradingEnabled || cfg.accountMode !== 'demo') return
+    if (!cfg.tradingEnabled || cfg.accountMode === 'unknown') return
 
     const atr = snapshot.technical?.timeframes.H1?.atr14
     const bid = snapshot.technical?.price.bid
@@ -620,6 +637,24 @@ export class AgentEngine {
         margin: null,
         marginFree: null
       }
+    }
+  }
+
+  private guardArmedAccount(snapshot: DecisionSnapshot): boolean {
+    const changed = disarmIfAccountDrift({
+      login: snapshot.account?.login ?? null,
+      mode: accountModeFromTradeMode(snapshot.account?.tradeMode)
+    })
+    if (!changed) return false
+    notify('account-drift', '自动交易已关闭', '检测到账户切换，请重新确认后再打开自动交易')
+    this.syncTimer()
+    this.emitConfig()
+    return true
+  }
+
+  private emitConfig(): void {
+    for (const listener of this.configListeners) {
+      listener()
     }
   }
 

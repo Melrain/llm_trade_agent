@@ -1,9 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { dirname, join } from 'path'
-import { app, shell } from 'electron'
+import { existsSync, readFileSync } from 'fs'
+import { join } from 'path'
+import { app } from 'electron'
 
-import { markWriting, unwatchJsonFile, watchJsonFile } from '../../db/file-watch'
-import { getKv, getKvJson, setKv } from '../../db/kv'
+import { getKvJson, setKv } from '../../db/kv'
 import { KV_KEYS } from '../../db/schema'
 import type { PmHttpConfig } from './client'
 
@@ -59,8 +58,6 @@ const DEFAULT_HTTP: PmHttpConfig = {
   userAgent: 'LLA-Market-Desktop/0.1'
 }
 
-const listeners = new Set<() => void>()
-
 function defaultWatchPath(): string {
   if (app.isPackaged) {
     const extra = join(process.resourcesPath, 'config', 'polymarket-watch.json')
@@ -69,10 +66,6 @@ function defaultWatchPath(): string {
   const fromApp = join(app.getAppPath(), 'resources', 'config', 'polymarket-watch.json')
   if (existsSync(fromApp)) return fromApp
   return join(__dirname, '../../resources/config/polymarket-watch.json')
-}
-
-function userWatchPath(): string {
-  return join(app.getPath('userData'), 'polymarket-watch.json')
 }
 
 function asString(v: unknown, fallback: string): string {
@@ -189,15 +182,6 @@ export function parseWatchDocument(raw: unknown): PolymarketWatchConfig {
   }
 }
 
-function notifyWatchChanged(): void {
-  for (const listener of listeners) listener()
-}
-
-export function onWatchConfigChanged(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
 function readBundledWatch(): unknown | null {
   const path = defaultWatchPath()
   try {
@@ -225,41 +209,4 @@ export function loadWatchConfig(): PolymarketWatchConfig {
 
 export function listEnabledInstruments(config: PolymarketWatchConfig): WatchInstrument[] {
   return config.instruments.filter((i) => i.enabled)
-}
-
-function exportWatchFile(): string {
-  const path = userWatchPath()
-  const raw = getKvJson<unknown>(KV_KEYS.polymarketWatch) ?? loadWatchConfig()
-  mkdirSync(dirname(path), { recursive: true })
-  markWriting(path, true)
-  try {
-    writeFileSync(path, `${JSON.stringify(raw, null, 2)}\n`)
-  } finally {
-    markWriting(path, false)
-  }
-  return path
-}
-
-function importWatchFile(path: string): void {
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown
-    parseWatchDocument(parsed)
-    if (JSON.stringify(parsed) === getKv(KV_KEYS.polymarketWatch)) return
-    setKv(KV_KEYS.polymarketWatch, parsed)
-    notifyWatchChanged()
-  } catch (error) {
-    console.warn('[pm] watch reimport', error instanceof Error ? error.message : error)
-  }
-}
-
-export async function openWatchConfig(): Promise<string> {
-  const path = exportWatchFile()
-  watchJsonFile(path, importWatchFile)
-  const err = await shell.openPath(path)
-  if (err) throw new Error(err)
-  return path
-}
-
-export function stopWatchConfigWatch(): void {
-  unwatchJsonFile(userWatchPath())
 }

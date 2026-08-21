@@ -49,30 +49,38 @@ export function formatMoney(value: number | null | undefined, digits = 2): strin
   return `$${formatNum(value, digits)}`
 }
 
+/** 对账曾把毫秒成交时间再 *1000，ISO 年份会到五万年 */
+function coerceDate(iso: string): Date {
+  const date = new Date(iso)
+  const ms = date.getTime()
+  if (!Number.isFinite(ms)) return date
+  return ms > 1e14 ? new Date(ms / 1000) : date
+}
+
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return '尚未成功'
-  const date = new Date(iso)
+  const date = coerceDate(iso)
   if (Number.isNaN(date.getTime())) return '—'
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 export function formatClock(iso: string | null | undefined): string {
   if (!iso) return '—'
-  const date = new Date(iso)
+  const date = coerceDate(iso)
   if (Number.isNaN(date.getTime())) return '—'
   return date.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
 }
 
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
-  const date = new Date(iso)
+  const date = coerceDate(iso)
   if (Number.isNaN(date.getTime())) return '—'
   return date.toLocaleDateString('zh-CN')
 }
 
 export function formatRelative(iso: string | null | undefined): string {
   if (!iso) return '—'
-  const ms = Date.now() - Date.parse(iso)
+  const ms = Date.now() - coerceDate(iso).getTime()
   if (!Number.isFinite(ms)) return formatTime(iso)
   if (ms < 0) return formatTime(iso)
   const mins = Math.floor(ms / 60_000)

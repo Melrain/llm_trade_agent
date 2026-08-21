@@ -1,4 +1,4 @@
-import { useEffect, useRef, type JSX } from 'react'
+import { useEffect, useRef, useState, type JSX } from 'react'
 import {
   AreaSeries,
   CandlestickSeries,
@@ -65,8 +65,12 @@ type PriceChartProps = {
   className?: string
 }
 
+/** lightweight-charts 要 Unix 秒。K 线/成交经 bridge 后是毫秒；误 *1000 的 closedAt 会到 1e12+。 */
 function toTime(t: number): UTCTimestamp {
-  return t as UTCTimestamp
+  if (!Number.isFinite(t) || t <= 0) return 0 as UTCTimestamp
+  let sec = t
+  while (sec > 10_000_000_000) sec = Math.floor(sec / 1000)
+  return Math.floor(sec) as UTCTimestamp
 }
 
 export function PriceChart({
@@ -94,6 +98,7 @@ export function PriceChart({
   const sigRef = useRef('')
   const onClickRef = useRef(onMarkerClick)
   const onLoadMoreRef = useRef(onLoadMore)
+  const [chartGen, setChartGen] = useState(0)
   onClickRef.current = onMarkerClick
   onLoadMoreRef.current = onLoadMore
 
@@ -146,6 +151,7 @@ export function PriceChart({
       chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
         if (range && range.from < 8) onLoadMoreRef.current?.()
       })
+      setChartGen((n) => n + 1)
     }
 
     mount()
@@ -198,7 +204,7 @@ export function PriceChart({
     } catch (error) {
       console.error('[chart] setData failed', error)
     }
-  }, [kind, bars, area, precision])
+  }, [kind, bars, area, precision, chartGen])
 
   useEffect(() => {
     const chart = chartRef.current
@@ -223,7 +229,7 @@ export function PriceChart({
       }
       series.setData(overlay.data.map((p) => ({ time: toTime(p.time), value: p.value })))
     }
-  }, [kind, overlays])
+  }, [kind, overlays, chartGen])
 
   useEffect(() => {
     if (!markersApi.current) return
@@ -236,7 +242,7 @@ export function PriceChart({
       text: m.text
     }))
     markersApi.current.setMarkers(next)
-  }, [markers])
+  }, [markers, chartGen])
 
   useEffect(() => {
     const series = candleRef.current
@@ -252,11 +258,11 @@ export function PriceChart({
         axisLabelVisible: true
       })
     )
-  }, [priceLines])
+  }, [priceLines, chartGen])
 
   useEffect(() => {
     rsiRef.current?.setData((rsi ?? []).map((p) => ({ time: toTime(p.time), value: p.value })))
-  }, [rsi])
+  }, [rsi, chartGen])
 
   return <div ref={hostRef} className={className ?? 'h-full w-full'} />
 }

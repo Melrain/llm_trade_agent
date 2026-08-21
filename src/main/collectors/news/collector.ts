@@ -4,8 +4,6 @@ import { fetchCalendar } from './calendar'
 import {
   listEnabledFeeds,
   loadNewsFeeds,
-  onNewsFeedsChanged,
-  stopNewsFeedsWatch,
   type NewsFeedInfo
 } from './feeds'
 import { fetchFeed, selectHeadlines } from './rss'
@@ -37,7 +35,6 @@ export class NewsCollector {
   private calendarTimer: NodeJS.Timeout | null = null
   private tail: Promise<void> = Promise.resolve()
   private started = false
-  private unsubFeeds: (() => void) | null = null
 
   listFeeds(): NewsFeedInfo[] {
     return loadNewsFeeds()
@@ -47,9 +44,6 @@ export class NewsCollector {
     if (this.started) return
     this.started = true
     this.hydrateHeadlines()
-    this.unsubFeeds = onNewsFeedsChanged(() => {
-      this.enqueue(() => this.pollNews())
-    })
     void this.refresh()
     this.newsTimer = setInterval(() => {
       this.enqueue(() => this.pollNews())
@@ -64,9 +58,6 @@ export class NewsCollector {
     if (this.calendarTimer) clearInterval(this.calendarTimer)
     this.newsTimer = null
     this.calendarTimer = null
-    this.unsubFeeds?.()
-    this.unsubFeeds = null
-    stopNewsFeedsWatch()
     this.started = false
   }
 

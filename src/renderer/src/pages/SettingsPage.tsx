@@ -26,10 +26,8 @@ export function SettingsPage(): JSX.Element {
   const saveConfig = useAgentStore((s) => s.saveConfig)
   const quotes = usePmStore((s) => s.quotes)
   const refreshPm = usePmStore((s) => s.refresh)
-  const openWatchConfig = usePmStore((s) => s.openWatchConfig)
   const feeds = useNewsStore((s) => s.feeds)
   const loadFeeds = useNewsStore((s) => s.loadFeeds)
-  const openFeedsConfig = useNewsStore((s) => s.openFeedsConfig)
   const refreshNews = useNewsStore((s) => s.refresh)
 
   const [baseUrl, setBaseUrl] = useState('')
@@ -180,7 +178,7 @@ export function SettingsPage(): JSX.Element {
               <div>
                 <p className="text-[13px]">自动决策</p>
                 <p className="text-[11px] text-muted-foreground">
-                  关闭后 Agent 运行灯变灰，不再按周期调用模型
+                  关闭后不再按周期调用模型，实弹总闸也会一起关掉。顶栏打开自动交易时会一并开启
                 </p>
               </div>
               <Switch checked={enabled} onCheckedChange={setEnabled} />
@@ -237,9 +235,7 @@ export function SettingsPage(): JSX.Element {
           <div className="grid max-w-xl gap-8">
             <div>
               <h2 className="text-[13px] font-semibold">新闻源</h2>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                只读列表。编辑 JSON 后点刷新，采集器会重新读配置。
-              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">只读展示当前已加载的新闻源。</p>
               <ul className="mt-3 divide-y divide-border rounded-lg border border-border">
                 {feeds.map((feed) => (
                   <li key={feed.source} className="px-3 py-2 text-[13px]">
@@ -265,14 +261,6 @@ export function SettingsPage(): JSX.Element {
               <div className="mt-2 flex gap-2">
                 <Button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void openFeedsConfig()}
-                >
-                  打开新闻源配置
-                </Button>
-                <Button
-                  type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => {
@@ -287,9 +275,7 @@ export function SettingsPage(): JSX.Element {
 
             <div>
               <h2 className="text-[13px] font-semibold">Polymarket watch</h2>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                只读展示当前已加载的市场。编辑配置后点刷新即可，不必重启应用。
-              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">只读展示当前已加载的市场。</p>
               <ul className="mt-3 divide-y divide-border rounded-lg border border-border">
                 {quotes.map((q) => (
                   <li key={q.id} className="px-3 py-2 text-[13px]">
@@ -302,14 +288,6 @@ export function SettingsPage(): JSX.Element {
                 )}
               </ul>
               <div className="mt-2 flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void openWatchConfig()}
-                >
-                  打开 watch 配置
-                </Button>
                 <Button type="button" variant="ghost" size="sm" onClick={() => void refreshPm()}>
                   刷新
                 </Button>

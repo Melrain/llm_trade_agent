@@ -1,5 +1,5 @@
 appId: com.llmtradeagent.desktop
-productName: LLM Trade Agent
+productName: LLMTradeAgent
 directories:
   buildResources: build
 files:
@@ -9,8 +9,9 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!docs/*'
+  - '!resources/**'
 asarUnpack:
-  - resources/**
   - '**/*.node'
 extraResources:
   - from: resources/mt5-bridge
@@ -26,13 +27,26 @@ extraResources:
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
 win:
+  icon: build/icon.ico
   executableName: llm_trade_agent
 nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
-  createDesktopShortcut: always
+  installerLanguages:
+    - zh_CN
+    - en_US
+  language: '2052'
 mac:
+  icon: build/icon.png
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
@@ -43,6 +57,7 @@ mac:
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
+  icon: build/icon.png
   target:
     - AppImage
     - snap

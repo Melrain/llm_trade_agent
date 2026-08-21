@@ -297,6 +297,7 @@ export type Mt5OrderCheckResult = {
 export type Mt5Deal = {
   ticket: number
   order: number
+  /** Unix 毫秒（bridge 会把秒级 time 乘 1000） */
   time: number
   type: number
   entry: number

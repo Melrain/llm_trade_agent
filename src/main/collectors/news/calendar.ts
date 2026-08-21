@@ -110,9 +110,8 @@ function keepUsd(row: FfEvent): boolean {
 
 export function selectCalendar(rows: FfEvent[], now = Date.now(), max = 12): CalendarEvent[] {
   const lookbackMs = 24 * 60 * 60 * 1000
-  const windowStart = now - 2 * 60 * 60 * 1000
-  const windowEnd = now + 24 * 60 * 60 * 1000
-  const soonMs = 15 * 60 * 1000
+  /** 与 snapshot/builder HALT_MS、风控禁开仓窗口一致 */
+  const haltMs = 15 * 60 * 1000
 
   return rows
     .filter(keepUsd)
@@ -123,6 +122,7 @@ export function selectCalendar(rows: FfEvent[], now = Date.now(), max = 12): Cal
       if (!title || !impact || !Number.isFinite(whenMs)) return null
       if (whenMs < now - lookbackMs) return null
       const when = new Date(whenMs).toISOString()
+      const halt = impact === 'high' && Math.abs(whenMs - now) <= haltMs
       return {
         id: `${when}|${title}|USD`,
         title,
@@ -133,8 +133,8 @@ export function selectCalendar(rows: FfEvent[], now = Date.now(), max = 12): Cal
         forecast: blank(row.forecast),
         previous: blank(row.previous),
         actual: blank(row.actual),
-        inWindow: whenMs >= windowStart && whenMs <= windowEnd,
-        soon: impact === 'high' && Math.abs(whenMs - now) <= soonMs
+        inWindow: halt,
+        soon: halt
       }
     })
     .filter((row): row is CalendarEvent => row != null)

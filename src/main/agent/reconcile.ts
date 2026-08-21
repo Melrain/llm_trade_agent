@@ -6,6 +6,18 @@ import {
   type Mt5Deal
 } from '../../preload/mt5-types'
 
+/** bridge 把秒级成交时间转成毫秒；未经过 bridge 的测试数据仍可能是秒 */
+function dealTimeMs(time: number): number {
+  if (!Number.isFinite(time) || time <= 0) return 0
+  return time < 10_000_000_000 ? time * 1000 : time
+}
+
+/** 误把毫秒再 *1000 后落库，年份会到五万年 */
+export function closedAtLooksWrong(iso: string | null | undefined): boolean {
+  const ms = Date.parse(iso ?? '')
+  return !Number.isFinite(ms) || ms > 1e14
+}
+
 /** 找出已发单开仓记录里可以回写结果的，返回更新后的记录副本 */
 export function reconcileOutcomes(records: AgentRecord[], deals: Mt5Deal[]): AgentRecord[] {
   if (deals.length === 0) return []
@@ -26,7 +38,7 @@ export function reconcileOutcomes(records: AgentRecord[], deals: Mt5Deal[]): Age
     if (record.execution?.status !== 'sent') continue
     const { action } = record.decision
     if (action !== 'open_buy' && action !== 'open_sell') continue
-    if (record.outcome?.status === 'closed') continue
+    if (record.outcome?.status === 'closed' && !closedAtLooksWrong(record.outcome.closedAt)) continue
 
     const entryDeal =
       (record.send?.deal != null ? byTicket.get(record.send.deal) : undefined) ??
@@ -51,7 +63,7 @@ export function reconcileOutcomes(records: AgentRecord[], deals: Mt5Deal[]): Age
     const outcome: AgentOutcome = {
       status: closed ? 'closed' : 'open',
       positionId: entryDeal.position_id,
-      closedAt: closed && lastOut ? new Date(lastOut.time * 1000).toISOString() : null,
+      closedAt: closed && lastOut ? new Date(dealTimeMs(lastOut.time)).toISOString() : null,
       closePrice: closed && lastOut ? lastOut.price : null,
       pnl: closed ? Math.round(pnl * 100) / 100 : null
     }
@@ -61,7 +73,9 @@ export function reconcileOutcomes(records: AgentRecord[], deals: Mt5Deal[]): Age
       !prev ||
       prev.status !== outcome.status ||
       prev.pnl !== outcome.pnl ||
-      prev.positionId !== outcome.positionId
+      prev.positionId !== outcome.positionId ||
+      prev.closedAt !== outcome.closedAt ||
+      prev.closePrice !== outcome.closePrice
     ) {
       updated.push({ ...record, outcome })
     }

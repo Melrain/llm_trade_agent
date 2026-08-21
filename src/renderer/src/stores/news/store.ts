@@ -58,8 +58,5 @@ export const useNewsStore = create<NewsStore>()((set, get) => ({
     } catch (error) {
       console.error('[news] listFeeds failed', error)
     }
-  },
-  openFeedsConfig: async () => {
-    await window.api.news.openFeedsConfig()
   }
 }))

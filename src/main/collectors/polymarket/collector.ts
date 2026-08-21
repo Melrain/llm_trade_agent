@@ -4,8 +4,6 @@ import { fetchMidpoint, fetchMidpoints, lookupMid } from './client'
 import {
   listEnabledInstruments,
   loadWatchConfig,
-  onWatchConfigChanged,
-  stopWatchConfigWatch,
   type PolymarketWatchConfig,
   type WatchInstrument
 } from './config'
@@ -40,7 +38,6 @@ export class PolymarketCollector {
   private spot: PmSpotPrice | null = null
   private spotBusy = false
   private lastSpotPersistAt = 0
-  private unsubWatch: (() => void) | null = null
 
   constructor(private readonly mt5?: Mt5Client) {}
 
@@ -62,9 +59,6 @@ export class PolymarketCollector {
     }
 
     this.store.load()
-    this.unsubWatch = onWatchConfigChanged(() => {
-      void this.refresh()
-    })
     this.armTimers()
     void this.cycle(true)
   }
@@ -76,9 +70,6 @@ export class PolymarketCollector {
     this.pollTimer = null
     this.resolveTimer = null
     this.spotTimer = null
-    this.unsubWatch?.()
-    this.unsubWatch = null
-    stopWatchConfigWatch()
     this.started = false
   }
 

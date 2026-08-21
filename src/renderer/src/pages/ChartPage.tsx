@@ -280,9 +280,15 @@ export function ChartPage(): JSX.Element {
   )
 }
 
+function barUnix(time: number): number {
+  let sec = time
+  while (sec > 10_000_000_000) sec = Math.floor(sec / 1000)
+  return Math.floor(sec)
+}
+
 function alignBar(bars: ChartBar[], unix: number): number | null {
   for (let i = bars.length - 1; i >= 0; i--) {
-    if (bars[i].time <= unix) return bars[i].time
+    if (barUnix(bars[i].time) <= unix) return bars[i].time
   }
   return null
 }

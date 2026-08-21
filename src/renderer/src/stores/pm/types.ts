@@ -13,7 +13,6 @@ export type PmActions = {
   initialize: () => Promise<void>
   refresh: () => Promise<void>
   openEvent: (slug: string) => Promise<void>
-  openWatchConfig: () => Promise<void>
   applySnapshot: (snapshot: PmSnapshot) => void
 }
 

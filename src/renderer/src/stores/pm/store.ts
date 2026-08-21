@@ -62,8 +62,5 @@ export const usePmStore = create<PmStore>()((set, get) => ({
   },
   openEvent: async (slug) => {
     await window.api.pm.openEvent(slug)
-  },
-  openWatchConfig: async () => {
-    await window.api.pm.openWatchConfig()
   }
 }))

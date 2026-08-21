@@ -11,7 +11,6 @@ export type NewsActions = {
   applySnapshot: (snapshot: NewsSnapshot) => void
   openUrl: (url: string) => Promise<void>
   loadFeeds: () => Promise<void>
-  openFeedsConfig: () => Promise<void>
 }
 
 export type NewsStore = NewsState & NewsActions

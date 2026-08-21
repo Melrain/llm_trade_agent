@@ -2,6 +2,8 @@ import type { AccountMode, Mt5TradeRequest } from './mt5-types'
 
 /** 本引擎发出的所有订单都带这个 magic，用于对账和识别自有仓位 */
 export const AGENT_MAGIC = 260820
+/** 有持仓时决策周期加密到 5 分钟 */
+export const HOLDING_INTERVAL_MS = 5 * 60_000
 
 export type AgentAction = 'open_buy' | 'open_sell' | 'close_position' | 'adjust_sltp' | 'hold'
 
@@ -125,4 +127,5 @@ export type AgentApi = {
   setConfig: (patch: AgentConfigPatch) => Promise<AgentPublicConfig>
   stats: () => Promise<AgentStats>
   onUpdated: (callback: (records: AgentRecord[]) => void) => () => void
+  onConfig: (callback: (config: AgentPublicConfig) => void) => () => void
 }

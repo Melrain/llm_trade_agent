@@ -9,9 +9,9 @@ assert.deepEqual(decideSendGate({ tradingEnabled: false, accountMode: 'demo', ch
 })
 
 assert.deepEqual(decideSendGate({ tradingEnabled: true, accountMode: 'real', checkRetcode: 0 }), {
-  send: false,
-  status: 'skipped',
-  reason: '实盘禁止发单'
+  send: true,
+  status: 'sent',
+  reason: '准备发单'
 })
 
 assert.deepEqual(
@@ -40,6 +40,15 @@ assert.deepEqual(decideSendGate({ tradingEnabled: true, accountMode: 'demo', che
 
 assert.deepEqual(
   decideSendGate({ tradingEnabled: true, accountMode: 'demo', checkRetcode: 10009 }),
+  {
+    send: true,
+    status: 'sent',
+    reason: '准备发单'
+  }
+)
+
+assert.deepEqual(
+  decideSendGate({ tradingEnabled: true, accountMode: 'real', checkRetcode: 10009 }),
   {
     send: true,
     status: 'sent',

@@ -65,6 +65,5 @@ export type PmApi = {
   getSnapshot: (symbol?: string) => Promise<PmSnapshot>
   refresh: (symbol?: string) => Promise<PmSnapshot>
   openEvent: (slug: string) => Promise<void>
-  openWatchConfig: () => Promise<string>
   onUpdated: (callback: (snapshot: PmSnapshot) => void) => () => void
 }

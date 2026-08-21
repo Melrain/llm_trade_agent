@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import { Bot, CandlestickChart, History, LayoutDashboard, Newspaper, Settings } from 'lucide-react'
 
+import appIcon from '@/assets/icon.png'
 import { cn } from '@/lib/utils'
 import { useAppStore, type AppPage } from '@/stores'
 
@@ -18,6 +19,7 @@ export function NavRail(): JSX.Element {
 
   return (
     <nav className="flex w-[72px] shrink-0 flex-col items-center border-r border-border bg-sidebar py-2">
+      <img src={appIcon} alt="LLMTradeAgent" width={32} height={32} className="mb-2 mt-1 size-8 rounded-md" />
       <div className="flex flex-1 flex-col items-center gap-1">
         {ITEMS.map((item) => (
           <NavButton
