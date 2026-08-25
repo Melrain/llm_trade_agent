@@ -24,6 +24,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { useAgentStore, useNewsStore, usePmStore } from '@/stores'
 import { TRADE_ASSETS, type TradeAsset, type TradeVenue } from '../../../preload/okx-types'
+import type { UpdaterStatus } from '../../../preload/updater-types'
 
 const INTERVALS = [
   { value: String(15 * 60 * 1000), label: '15 分钟' },
@@ -51,7 +52,13 @@ export function SettingsPage(): JSX.Element {
   const [maxVolume, setMaxVolume] = useState('0.1')
   const [riskPct, setRiskPct] = useState('1')
   const [fixedVolume, setFixedVolume] = useState('')
-  const [section, setSection] = useState<'llm' | 'decision' | 'risk' | 'venue' | 'data'>('llm')
+  const [section, setSection] = useState<
+    'llm' | 'decision' | 'risk' | 'venue' | 'data' | 'about'
+  >(() => {
+    if (sessionStorage.getItem('settings-section') !== 'about') return 'llm'
+    sessionStorage.removeItem('settings-section')
+    return 'about'
+  })
   const [venue, setVenue] = useState<TradeVenue>('mt5')
   const [okxLeverage, setOkxLeverage] = useState('5')
   const [okxTdMode, setOkxTdMode] = useState<'cross' | 'isolated'>('cross')
@@ -61,10 +68,26 @@ export function SettingsPage(): JSX.Element {
   const [okxTest, setOkxTest] = useState<string | null>(null)
   const [okxTesting, setOkxTesting] = useState(false)
   const [liveConfirm, setLiveConfirm] = useState(false)
+  const [update, setUpdate] = useState<UpdaterStatus | null>(null)
+  const [updateBusy, setUpdateBusy] = useState(false)
 
   useEffect(() => {
     void loadFeeds()
   }, [loadFeeds])
+
+  useEffect(() => {
+    void window.api.updater.getStatus().then(setUpdate)
+    return window.api.updater.onStatus(setUpdate)
+  }, [])
+
+  useEffect(() => {
+    const openAbout = (): void => {
+      sessionStorage.removeItem('settings-section')
+      setSection('about')
+    }
+    window.addEventListener('lla-open-about', openAbout)
+    return () => window.removeEventListener('lla-open-about', openAbout)
+  }, [])
 
   useEffect(() => {
     if (!config) return
@@ -184,7 +207,8 @@ export function SettingsPage(): JSX.Element {
             ['venue', '交易场所'],
             ['decision', '决策周期'],
             ['risk', '风控'],
-            ['data', '数据源']
+            ['data', '数据源'],
+            ['about', '关于']
           ] as const
         ).map(([id, label]) => (
           <button
@@ -525,13 +549,36 @@ export function SettingsPage(): JSX.Element {
           </div>
         )}
 
+        {section === 'about' && (
+          <AboutSection
+            update={update}
+            busy={updateBusy}
+            onCheck={() => {
+              setUpdateBusy(true)
+              void window.api.updater
+                .check()
+                .then(setUpdate)
+                .finally(() => setUpdateBusy(false))
+            }}
+            onInstall={() => {
+              setUpdateBusy(true)
+              void window.api.updater
+                .downloadAndInstall()
+                .then(setUpdate)
+                .finally(() => setUpdateBusy(false))
+            }}
+          />
+        )}
+
         {error && <p className="mt-4 text-xs text-red-400">{error}</p>}
 
-        <div className="pointer-events-none sticky bottom-0 mt-8 flex justify-end bg-gradient-to-t from-background via-background to-transparent pt-6">
-          <Button className="pointer-events-auto" disabled={!dirty || saving} onClick={save}>
-            {saving ? '保存中…' : '保存'}
-          </Button>
-        </div>
+        {section !== 'about' && (
+          <div className="pointer-events-none sticky bottom-0 mt-8 flex justify-end bg-gradient-to-t from-background via-background to-transparent pt-6">
+            <Button className="pointer-events-auto" disabled={!dirty || saving} onClick={save}>
+              {saving ? '保存中…' : '保存'}
+            </Button>
+          </div>
+        )}
       </div>
 
       <AlertDialog open={liveConfirm} onOpenChange={setLiveConfirm}>
@@ -558,6 +605,82 @@ export function SettingsPage(): JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  )
+}
+
+function updateLabel(status: UpdaterStatus | null): string {
+  if (!status) return '正在读取版本…'
+  if (status.state === 'dev') return '开发版不检查更新'
+  if (status.state === 'checking') return '正在检查…'
+  if (status.state === 'available') {
+    return `发现新版本 ${status.availableVersion ?? ''}`
+  }
+  if (status.state === 'not-available') return '已是最新版本'
+  if (status.state === 'downloading') {
+    return `下载中 ${status.percent ?? 0}%`
+  }
+  if (status.state === 'ready') return '已下载，可以重启安装'
+  if (status.state === 'error') return status.error ?? '检查失败'
+  return '尚未检查'
+}
+
+function AboutSection({
+  update,
+  busy,
+  onCheck,
+  onInstall
+}: {
+  update: UpdaterStatus | null
+  busy: boolean
+  onCheck: () => void
+  onInstall: () => void
+}): JSX.Element {
+  const state = update?.state
+  const canInstall = state === 'available' || state === 'ready'
+  const checking = busy || state === 'checking' || state === 'downloading'
+  const percent = update?.percent ?? 0
+
+  return (
+    <div className="grid max-w-xl gap-4">
+      <div>
+        <h2 className="text-[13px] font-semibold">LLMTradeAgent</h2>
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          当前版本 {update?.currentVersion ?? '—'}
+        </p>
+        <p className="mt-2 text-[13px]">{updateLabel(update)}</p>
+        {update?.releaseNotes && (state === 'available' || state === 'ready') && (
+          <p className="mt-2 text-[11px] text-muted-foreground">{update.releaseNotes}</p>
+        )}
+        {state === 'downloading' && (
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+            <div className="h-full bg-foreground" style={{ width: `${Math.min(100, percent)}%` }} />
+          </div>
+        )}
+        {state === 'error' && update?.error && (
+          <p className="mt-2 text-xs text-red-400">{update.error}</p>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={checking || state === 'dev'}
+          onClick={onCheck}
+        >
+          检查更新
+        </Button>
+        {canInstall && (
+          <Button type="button" size="sm" disabled={checking} onClick={onInstall}>
+            {state === 'ready' ? '重启安装' : '下载并重启'}
+          </Button>
+        )}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        更新会先关闭自动交易再下载安装包。未签名时 Windows 可能弹出 SmartScreen
+        拦截，选择仍要运行即可。
+      </p>
     </div>
   )
 }

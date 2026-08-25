@@ -7,6 +7,7 @@ import type { PmApi, PmSnapshot } from './pm-types'
 import type { AgentApi, AgentConfigPatch, AgentPublicConfig, AgentRecord } from './agent-types'
 import type { SnapshotApi, DecisionSnapshot } from './snapshot-types'
 import type { OkxApi, OkxCandleBar, OkxPlaceOrderInput, OkxPosSide } from './okx-types'
+import type { UpdaterApi, UpdaterStatus } from './updater-types'
 
 const api: {
   mt5: Mt5Api
@@ -16,6 +17,7 @@ const api: {
   news: NewsApi
   snapshot: SnapshotApi
   agent: AgentApi
+  updater: UpdaterApi
 } = {
   okx: {
     test: () => ipcRenderer.invoke('okx:test'),
@@ -130,6 +132,20 @@ const api: {
       ipcRenderer.on('agent:config', listener)
       return () => {
         ipcRenderer.removeListener('agent:config', listener)
+      }
+    }
+  },
+  updater: {
+    getStatus: () => ipcRenderer.invoke('updater:getStatus'),
+    check: () => ipcRenderer.invoke('updater:check'),
+    downloadAndInstall: () => ipcRenderer.invoke('updater:downloadAndInstall'),
+    onStatus: (callback: (status: UpdaterStatus) => void) => {
+      const listener = (_event: unknown, next: UpdaterStatus): void => {
+        callback(next)
+      }
+      ipcRenderer.on('updater:status', listener)
+      return () => {
+        ipcRenderer.removeListener('updater:status', listener)
       }
     }
   }

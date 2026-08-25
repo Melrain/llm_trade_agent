@@ -12,6 +12,7 @@ import { AgentEngine, registerAgentIpc } from './agent'
 import { getOkxCredentials } from './agent/config'
 import { OkxClient, registerOkxIpc } from './okx'
 import { closeDb, openDb } from './db'
+import { checkForUpdatesOnReady, registerUpdaterIpc } from './updater'
 
 const mt5 = new Mt5Client()
 const okx = new OkxClient(() => getOkxCredentials())
@@ -41,6 +42,7 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
+    checkForUpdatesOnReady()
   })
 
   mainWindow.on('closed', () => {
@@ -110,6 +112,7 @@ if (!app.requestSingleInstanceLock()) {
     registerNewsIpc(news)
     registerSnapshotIpc(snapshot)
     registerAgentIpc(agent, snapshot)
+    registerUpdaterIpc(agent)
     pm.start()
     market.start()
     news.start()

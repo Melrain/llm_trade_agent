@@ -11,6 +11,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { kindLabel, recordKind } from '@/lib/record-status'
 import { useAgentStore, useAppStore, useMarketStore, useNewsStore, usePmStore } from '@/stores'
+import type { UpdaterStatus } from '../../../../preload/updater-types'
 
 import { NavRail } from './NavRail'
 import { StatusBar } from './StatusBar'
@@ -38,9 +39,38 @@ export function AppShell(): JSX.Element {
         <Toaster position="bottom-right" />
         <AgentToasts />
         <SourceToasts />
+        <UpdateToast />
       </div>
     </TooltipProvider>
   )
+}
+
+function UpdateToast(): null {
+  const setActivePage = useAppStore((s) => s.setActivePage)
+  const seen = useRef<string | null>(null)
+
+  useEffect(() => {
+    const notify = (status: UpdaterStatus): void => {
+      if (status.state !== 'available' || !status.availableVersion) return
+      if (seen.current === status.availableVersion) return
+      seen.current = status.availableVersion
+      toast.info(`发现新版本 ${status.availableVersion}`, {
+        description: '到设置 → 关于 下载并重启',
+        action: {
+          label: '去设置',
+          onClick: () => {
+            sessionStorage.setItem('settings-section', 'about')
+            window.dispatchEvent(new Event('lla-open-about'))
+            setActivePage('settings')
+          }
+        }
+      })
+    }
+    void window.api.updater.getStatus().then(notify)
+    return window.api.updater.onStatus(notify)
+  }, [setActivePage])
+
+  return null
 }
 
 function AgentToasts(): null {

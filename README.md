@@ -21,6 +21,8 @@
 
 到 [Releases](https://github.com/Melrain/llm_trade_agent/releases) 下载最新的 `llm_trade_agent-*-setup.exe`，按向导安装后打开 **LLMTradeAgent**。
 
+安装后可在 **设置 → 关于** 检查更新。发现新版本后点「下载并重启」，会先关闭自动交易再覆盖安装。本机数据（API Key、决策记录）不会被清掉。
+
 也可以从源码运行，见文末。
 
 ## 第一次使用
@@ -153,6 +155,9 @@
 **支持哪些经纪商？**  
 任意提供 MT5 的经纪商。品种目前是 **BTC / ETH**。
 
+**如何更新到新版本？**  
+设置 → 关于 → 检查更新。有新版本时点「下载并重启」，会先关闭自动交易再覆盖安装。从源码发版请用 `npm run release:win`，或手动上传时不要漏掉 `latest.yml` 和 `.blockmap`。
+
 **为什么只有 Windows？**  
 MT5 官方 Python 接口仅支持 Windows。
 
@@ -174,7 +179,15 @@ npm run dev
 npm run build:win
 ```
 
-产物在 `dist/`。`prepare:mt5-runtime` 会下载嵌入式 Python 并安装 MT5 桥依赖，只需做一次。
+发布到 GitHub Releases（需本机 `GH_TOKEN`，权限含 `repo`）：
+
+```bash
+npm run release:win
+```
+
+产物在 `dist/`。自动更新依赖同一次 Release 里的 `latest.yml`、`llm_trade_agent-*-setup.exe` 和 `.blockmap`；只手传 exe、漏传 yml 时，客户端检查更新会失败。
+
+`prepare:mt5-runtime` 会下载嵌入式 Python 并安装 MT5 桥依赖，只需做一次。
 
 ## 许可证
 

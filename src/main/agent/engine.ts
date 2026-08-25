@@ -156,6 +156,19 @@ export class AgentEngine {
     this.started = false
   }
 
+  async waitUntilIdle(timeoutMs = 15_000): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs
+    while (this.running && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    }
+    return !this.running
+  }
+
+  notifyConfigChanged(): void {
+    this.syncTimer()
+    this.emitConfig()
+  }
+
   list(): AgentRecord[] {
     return this.records
   }

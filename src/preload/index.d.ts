@@ -6,6 +6,7 @@ import type { PmApi } from './pm-types'
 import type { AgentApi } from './agent-types'
 import type { SnapshotApi } from './snapshot-types'
 import type { OkxApi } from './okx-types'
+import type { UpdaterApi } from './updater-types'
 
 export type {
   Mt5AccountInfo,
@@ -95,6 +96,8 @@ export type {
   AgentStats
 } from './agent-types'
 
+export type { UpdaterApi, UpdaterState, UpdaterStatus } from './updater-types'
+
 export type LlaMarketApi = {
   mt5: Mt5Api
   okx: OkxApi
@@ -103,6 +106,7 @@ export type LlaMarketApi = {
   news: NewsApi
   snapshot: SnapshotApi
   agent: AgentApi
+  updater: UpdaterApi
 }
 
 declare global {
