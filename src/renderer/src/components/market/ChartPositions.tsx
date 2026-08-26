@@ -142,6 +142,10 @@ function ClosePositionDialog({
         onDone()
         return
       }
+      if (!price) {
+        setLog('没有可用报价')
+        return
+      }
       const buy = position.type === 'buy'
       const request: Mt5TradeRequest = {
         action: TRADE_ACTION_DEAL,
