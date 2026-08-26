@@ -14,7 +14,9 @@ const TAG_RULES: Array<{ tag: string; re: RegExp }> = [
   { tag: 'gold', re: /\b(gold|xau|bullion|xauusd)\b/i },
   { tag: 'geo', re: /\b(iran|israel|hormuz|ukraine|taiwan|ceasefire|geopolit|strait)\b/i },
   { tag: 'usd', re: /\b(dxy|us dollar|u\.s\. dollar|treasury|10-?year yield)\b/i },
-  { tag: 'crypto', re: /\b(bitcoin|btc|ethereum|eth|crypto|okx|binance|solana|sol|perpetual)\b/i }
+  { tag: 'crypto', re: /\b(bitcoin|btc|ethereum|eth|crypto|okx|binance|solana|sol|perpetual)\b/i },
+  { tag: 'btc', re: /\b(bitcoin|btc)\b/i },
+  { tag: 'eth', re: /\b(ethereum|eth)\b/i }
 ]
 
 const KEEP_TAGS = new Set(['gold', 'geo', 'fed', 'nfp'])

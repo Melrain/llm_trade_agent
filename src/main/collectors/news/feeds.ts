@@ -15,7 +15,23 @@ type FeedsFile = {
   feeds?: unknown[]
 }
 
+const CRYPTO_FEEDS: NewsFeedInfo[] = [
+  {
+    source: 'coindesk',
+    sourceZh: 'CoinDesk',
+    url: 'https://www.coindesk.com/arc/outboundfeeds/rss/',
+    enabled: true
+  },
+  {
+    source: 'cointelegraph',
+    sourceZh: 'Cointelegraph',
+    url: 'https://cointelegraph.com/rss',
+    enabled: true
+  }
+]
+
 const DEFAULT_FEEDS: NewsFeedInfo[] = [
+  ...CRYPTO_FEEDS,
   {
     source: 'forexlive',
     sourceZh: '外汇直播',
@@ -80,10 +96,26 @@ function readBundledFeeds(): unknown | null {
   }
 }
 
+function mergeCryptoFeeds(rows: NewsFeedInfo[]): { rows: NewsFeedInfo[]; changed: boolean } {
+  const have = new Set(rows.map((row) => row.source))
+  const extra = CRYPTO_FEEDS.filter((row) => !have.has(row.source))
+  return extra.length ? { rows: [...extra, ...rows], changed: true } : { rows, changed: false }
+}
+
 export function loadNewsFeeds(): NewsFeedInfo[] {
   try {
     const fromKv = getKvJson<unknown>(KV_KEYS.newsFeeds)
-    if (fromKv != null) return parseFeedsDocument(fromKv)
+    if (fromKv != null) {
+      const merged = mergeCryptoFeeds(parseFeedsDocument(fromKv))
+      if (merged.changed) {
+        try {
+          setKv(KV_KEYS.newsFeeds, { version: 2, feeds: merged.rows })
+        } catch {
+          /* ignore */
+        }
+      }
+      return merged.rows
+    }
   } catch (error) {
     console.warn('[news] feeds kv', error instanceof Error ? error.message : error)
     return DEFAULT_FEEDS

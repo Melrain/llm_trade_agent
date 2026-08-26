@@ -26,7 +26,12 @@ import type { Mt5Client } from '../../mt5/client'
 import type { OkxClient } from '../../okx/client'
 import { posIdToTicket } from '../../okx/normalize'
 import { okxPositionType } from '../../okx/order-builder'
-import { okxInstIdForAsset, venueSymbol, type TradeAsset } from '../../../preload/okx-types'
+import {
+  okxInstIdForAsset,
+  venueSymbol,
+  type TradeAsset,
+  type TradeVenue
+} from '../../../preload/okx-types'
 import { fetchCryptoSpotFromMt5 } from './spot-mt5'
 
 const OKX_BARS: Record<MarketTimeframeId, string> = {
@@ -148,6 +153,7 @@ export class MarketCollector {
   private tail: Promise<void> = Promise.resolve()
   private started = false
   private cachedSpot: { asset: TradeAsset; symbol: string } | null = null
+  private lastRoute: { venue: TradeVenue; asset: TradeAsset } | null = null
   private lastPriceKey: string | null = null
   private lastPriceChangeAt: number | null = null
 
@@ -197,7 +203,21 @@ export class MarketCollector {
     return run
   }
 
+  private syncRoute(): boolean {
+    const venue = getVenue()
+    const asset = getAsset()
+    if (this.lastRoute?.venue === venue && this.lastRoute.asset === asset) return false
+    this.lastRoute = { venue, asset }
+    this.cachedSpot = null
+    this.lastPriceKey = null
+    this.lastPriceChangeAt = null
+    this.snapshot = emptySnapshot(venueSymbol(venue, asset), venue)
+    this.emit()
+    return true
+  }
+
   private async poll(): Promise<void> {
+    this.syncRoute()
     try {
       const next = await this.buildSnapshot()
       this.snapshot = next
@@ -337,7 +357,7 @@ export class MarketCollector {
           venue: 'okx',
           symbol: instId,
           asOf: new Date().toISOString(),
-          ready: timeframes.H1 != null && timeframes.D1 != null,
+          ready: false,
           lastError: message,
           priceChangedAt: this.lastPriceChangeAt,
           price: { bid, ask, mid, spread },

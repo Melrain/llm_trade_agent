@@ -102,7 +102,6 @@ export function SettingsPage(): JSX.Element {
       Number(maxVolume) !== config.maxVolume ||
       Number(riskPct) / 100 !== config.riskPct ||
       (fixed ?? null) !== (config.fixedVolume ?? null) ||
-      venue !== (config.venue ?? 'mt5') ||
       Number(okxLeverage) !== (config.okx?.leverage ?? 5) ||
       okxTdMode !== (config.okx?.tdMode ?? 'cross') ||
       okxApiKey.trim() !== '' ||
@@ -120,7 +119,6 @@ export function SettingsPage(): JSX.Element {
     maxVolume,
     riskPct,
     fixedVolume,
-    venue,
     okxLeverage,
     okxTdMode,
     okxApiKey,
@@ -162,7 +160,6 @@ export function SettingsPage(): JSX.Element {
       temperature: Number.isFinite(temp) ? temp : undefined,
       intervalMs: Number.isFinite(interval) ? interval : undefined,
       enabled,
-      venue,
       okxTdMode,
       ...(Number.isFinite(Number(okxLeverage)) ? { okxLeverage: Number(okxLeverage) } : {}),
       ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
@@ -236,8 +233,15 @@ export function SettingsPage(): JSX.Element {
 
         {section === 'venue' && (
           <div className="grid max-w-xl gap-4">
-            <Field label="交易场所" hint="切换后会关闭自动交易总闸，需要重新确认。">
-              <Select value={venue} onValueChange={(v) => setVenue(v as TradeVenue)}>
+            <Field label="交易场所" hint="立刻生效，并会关闭自动交易总闸。">
+              <Select
+                value={venue}
+                onValueChange={(v) => {
+                  const next = v as TradeVenue
+                  setVenue(next)
+                  if (next !== (config?.venue ?? 'mt5')) void saveConfig({ venue: next })
+                }}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -568,10 +572,10 @@ function Field({
   children: ReactNode
 }): JSX.Element {
   return (
-    <label className="grid gap-1.5">
+    <div className="grid gap-1.5">
       <Label className="text-[13px]">{label}</Label>
       {children}
       {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
-    </label>
+    </div>
   )
 }

@@ -81,19 +81,31 @@ export class OkxClient {
   private specCache = new Map<string, OkxInstrumentSpec & { ts: number }>()
   private posModeCache: { posMode: OkxPosMode; ts: number } | null = null
   private levCache = new Map<string, number>()
+  private credsFp: string | null = null
 
   constructor(private readonly readCredentials: OkxCredentialReader) {}
 
   credentials(): Credentials | null {
-    return this.readCredentials()
+    return this.syncCredentials()
   }
 
   hasKeys(): boolean {
-    return this.readCredentials() != null
+    return this.syncCredentials() != null
+  }
+
+  private syncCredentials(): Credentials | null {
+    const creds = this.readCredentials()
+    const fp = creds ? `${creds.demo ? '1' : '0'}|${creds.apiKey}|${creds.baseUrl}` : ''
+    if (fp !== this.credsFp) {
+      this.credsFp = fp
+      this.posModeCache = null
+      this.levCache.clear()
+    }
+    return creds
   }
 
   async testConnection(): Promise<OkxConnectionTest> {
-    const creds = this.readCredentials()
+    const creds = this.syncCredentials()
     if (!creds) {
       return { ok: false, demo: false, uid: null, posMode: null, error: '尚未配置 OKX API Key' }
     }
@@ -522,7 +534,7 @@ export class OkxClient {
     path: string,
     query?: Record<string, string | number | undefined>
   ): Promise<T> {
-    const creds = this.readCredentials()
+    const creds = this.syncCredentials()
     const base = creds?.baseUrl || 'https://www.okx.com'
     const qs = query ? buildQuery(query) : ''
     const res = await fetchJson<OkxEnvelope<T>>(`${base}${path}${qs}`, {
@@ -587,7 +599,7 @@ export class OkxClient {
   }
 
   private requireCreds(): Credentials {
-    const creds = this.readCredentials()
+    const creds = this.syncCredentials()
     if (!creds) throw new Error('尚未配置 OKX API Key / Secret / Passphrase')
     return creds
   }

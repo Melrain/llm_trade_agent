@@ -153,7 +153,7 @@ export function buildDecisionSnapshot(input: BuilderInput): DecisionSnapshot {
       venue
     },
     sources: {
-      market: sourceOf(market.ready, market.lastError),
+      market: sourceOf(market.ready && !market.lastError, market.lastError),
       polymarket: sourceOf(
         pm.health.status === 'ok' || pm.health.status === 'degraded',
         pm.health.lastError,

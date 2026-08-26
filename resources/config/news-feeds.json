@@ -1,6 +1,18 @@
 {
-  "version": 1,
+  "version": 2,
   "feeds": [
+    {
+      "source": "coindesk",
+      "sourceZh": "CoinDesk",
+      "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+      "enabled": true
+    },
+    {
+      "source": "cointelegraph",
+      "sourceZh": "Cointelegraph",
+      "url": "https://cointelegraph.com/rss",
+      "enabled": true
+    },
     {
       "source": "forexlive",
       "sourceZh": "外汇直播",

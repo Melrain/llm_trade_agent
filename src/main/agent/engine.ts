@@ -670,13 +670,8 @@ export class AgentEngine {
         'okx.closePosition'
       )
     } else {
-      const pending = await this.okx.listPendingAlgos(intent.instId)
-      const ids = pending
-        .map((row) => (typeof row.algoId === 'string' ? row.algoId : ''))
-        .filter(Boolean)
-      if (ids.length) await this.okx.cancelAlgos(intent.instId, ids)
       result = await withTimeout(
-        this.okx.placeAlgoSlTp({
+        this.okx.replaceAlgoSlTp({
           instId: intent.instId,
           tdMode: intent.tdMode,
           side: intent.side ?? 'sell',
@@ -686,7 +681,7 @@ export class AgentEngine {
           posSide: intent.posSide
         }),
         SEND_TIMEOUT_MS,
-        'okx.placeAlgoSlTp'
+        'okx.replaceAlgoSlTp'
       )
     }
     const ord = result.ordId ? Number(result.ordId) : NaN
@@ -837,12 +832,7 @@ export class AgentEngine {
     })
     if (pending.length === 0) return
 
-    const instId = pending[0]?.symbol
-    const positions = await withTimeout(
-      this.okx.getPositions(instId),
-      CHECK_TIMEOUT_MS,
-      'okx.positions'
-    )
+    const positions = await withTimeout(this.okx.getPositions(), CHECK_TIMEOUT_MS, 'okx.positions')
     const earliest = Math.min(...pending.map((row) => Date.parse(row.createdAt)))
     const bills = await withTimeout(
       this.okx.getBills(Math.max(0, earliest - 3_600_000)),
@@ -853,6 +843,7 @@ export class AgentEngine {
     for (const row of pending) {
       const want = row.decision.action === 'open_buy' ? 'buy' : 'sell'
       const stillOpen = positions.some((pos) => {
+        if (pos.instId && pos.instId !== row.symbol) return false
         const type = pos.posSide === 'short' || pos.pos < 0 ? 'sell' : 'buy'
         return type === want
       })

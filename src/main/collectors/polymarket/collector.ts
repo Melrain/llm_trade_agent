@@ -8,7 +8,6 @@ import {
   type WatchInstrument
 } from './config'
 import { resolvedToQuote, resolveWatchEvent, type PricedLeg, type ResolvedEvent } from './resolve'
-import { fetchGoldSpotFromMt5, SPOT_STORE_ID } from './spot-mt5'
 import { selectProb } from './quotes'
 import { PmPriceStore } from './store'
 
@@ -34,10 +33,8 @@ export class PolymarketCollector {
   private spotTimer: NodeJS.Timeout | null = null
   private tail: Promise<void> = Promise.resolve()
   private started = false
-  private goldMt5Symbol: string | null = null
   private spot: PmSpotPrice | null = null
   private spotBusy = false
-  private lastSpotPersistAt = 0
 
   constructor(private readonly mt5?: Mt5Client) {}
 
@@ -117,7 +114,6 @@ export class PolymarketCollector {
     this.resolveTimer = setInterval(() => {
       void this.cycle(true)
     }, this.config.resolveIntervalMs)
-    this.ensureSpotTimer()
   }
 
   private findInstrument(symbol: string): WatchInstrument | undefined {
@@ -143,7 +139,6 @@ export class PolymarketCollector {
       if (forceResolve || !this.config) {
         this.config = loadWatchConfig()
         this.health.pollIntervalMs = this.config.pollIntervalMs
-        this.ensureSpotTimer()
       }
       if (forceResolve || this.resolved.length === 0) {
         await this.resolveAll()
@@ -262,15 +257,6 @@ export class PolymarketCollector {
     void this.refreshSpot()
   }
 
-  private ensureSpotTimer(): void {
-    if (this.spotTimer) clearInterval(this.spotTimer)
-    const ms = this.config?.spotIntervalMs ?? 1_000
-    this.spotTimer = setInterval(() => {
-      void this.refreshSpot()
-    }, ms)
-    void this.refreshSpot()
-  }
-
   private async refreshSpot(): Promise<void> {
     if (this.spotBusy || !this.mt5) return
     this.spotBusy = true
@@ -293,33 +279,7 @@ export class PolymarketCollector {
   }
 
   private async fetchSpot(): Promise<PmSpotPrice | null> {
-    if (!this.mt5) return null
-    try {
-      const tick = await fetchGoldSpotFromMt5(this.mt5, this.goldMt5Symbol)
-      this.goldMt5Symbol = tick.symbol
-      const now = Date.now()
-      if (now - this.lastSpotPersistAt >= 60_000) {
-        this.store.append(SPOT_STORE_ID, tick.price)
-        this.lastSpotPersistAt = now
-      }
-      const change24h = this.store.change24h(SPOT_STORE_ID, tick.price)
-      const prev = change24h != null ? tick.price - change24h : null
-      const change24hPct = change24h != null && prev != null && prev !== 0 ? change24h / prev : null
-      return {
-        symbol: tick.symbol,
-        price: tick.price,
-        change24h,
-        change24hPct,
-        asOf: new Date(tick.timeMs).toISOString()
-      }
-    } catch (error) {
-      this.goldMt5Symbol = null
-      const message = error instanceof Error ? error.message : String(error)
-      if (!message.includes('未就绪')) {
-        console.warn('[pm] MT5 gold spot failed', error)
-      }
-      return null
-    }
+    return null
   }
 
   private fail(error: unknown): void {
