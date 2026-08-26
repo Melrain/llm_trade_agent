@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 
-import { formatNum } from '@/lib/format'
+import { formatFunding, formatPrice, formatSpread } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 export function QuoteCard({
@@ -8,24 +8,29 @@ export function QuoteCard({
   ask,
   spread,
   swapLong,
-  swapShort
+  swapShort,
+  digits,
+  venue
 }: {
   bid: number | null
   ask: number | null
   spread: number | null
   swapLong: number | null
   swapShort: number | null
+  digits?: number | null
+  venue?: 'mt5' | 'okx'
 }): JSX.Element {
+  const rateLabel = venue === 'okx' ? '资金费率 多/空' : '过夜费 多/空'
   return (
     <section className="rounded-lg border border-border bg-card p-4">
       <h3 className="text-xs font-medium text-muted-foreground">报价</h3>
       <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[13px]">
-        <Row label="买价" value={formatNum(bid)} />
-        <Row label="卖价" value={formatNum(ask)} />
-        <Row label="点差" value={formatNum(spread)} />
+        <Row label="买价" value={formatPrice(bid, digits)} />
+        <Row label="卖价" value={formatPrice(ask, digits)} />
+        <Row label="点差" value={formatSpread(spread, digits)} />
         <Row
-          label="过夜费 多/空"
-          value={`${formatNum(swapLong)} / ${formatNum(swapShort)}`}
+          label={rateLabel}
+          value={`${formatFunding(swapLong)} / ${formatFunding(swapShort)}`}
           className="col-span-2"
         />
       </dl>

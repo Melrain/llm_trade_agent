@@ -4,6 +4,8 @@ import { ActionBadge } from '@/components/agent/RiskVerdictBadge'
 import { formatClock, formatNum } from '@/lib/format'
 import { kindIcon, recordKind } from '@/lib/record-status'
 import { cn } from '@/lib/utils'
+import { volumeUnit } from '@/lib/venue-ui'
+import { useAgentStore } from '@/stores'
 import type { AgentRecord } from '../../../../preload/agent-types'
 
 export function DecisionCard({
@@ -15,9 +17,11 @@ export function DecisionCard({
   selected?: boolean
   onClick?: () => void
 }): JSX.Element {
+  const venue = useAgentStore((s) => s.config?.venue ?? 'mt5')
   const kind = recordKind(row)
   const volume = row.sizedVolume ?? row.decision?.volume ?? null
   const reasoning = row.decision?.reasoning ?? row.parseError ?? row.riskReason ?? ''
+  const unit = volumeUnit(venue)
   return (
     <button
       type="button"
@@ -33,7 +37,9 @@ export function DecisionCard({
         </span>
         <ActionBadge action={row.decision?.action ?? 'hold'} />
         {volume != null && (
-          <span className="font-mono text-[13px] tabular-nums">{formatNum(volume, 2)}</span>
+          <span className="font-mono text-[13px] tabular-nums">
+            {formatNum(volume, 2)} {unit}
+          </span>
         )}
         <span className="ml-auto text-[15px]">{kindIcon(kind)}</span>
       </div>

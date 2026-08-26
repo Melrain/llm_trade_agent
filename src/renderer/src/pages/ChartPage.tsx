@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { emaSeries, rsiSeries } from '@/lib/indicators'
 import { cn } from '@/lib/utils'
+import { assetShortName } from '@/lib/venue-ui'
 import { isTradeSuccess } from '../../../preload/mt5-types'
 import type { MarketTimeframeId } from '../../../preload/market-types'
 import type { OkxCandleBar } from '../../../preload/okx-types'
@@ -210,7 +211,10 @@ export function ChartPage(): JSX.Element {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-10 shrink-0 items-center gap-3 border-b border-border px-3">
-        <span className="text-[13px] font-medium">{symbol}</span>
+        <span className="text-[13px] font-medium">{assetShortName(symbol)}</span>
+        {venue === 'okx' && (
+          <span className="text-[11px] text-muted-foreground">{symbol}</span>
+        )}
         <div className="flex rounded-md bg-muted p-0.5">
           {(['M15', 'H1', 'H4', 'D1'] as MarketTimeframeId[]).map((id) => (
             <button
@@ -291,9 +295,11 @@ export function ChartPage(): JSX.Element {
             spread={price?.spread ?? null}
             swapLong={swap?.long ?? null}
             swapShort={swap?.short ?? null}
+            digits={digits}
+            venue={venue}
           />
-          <TimeframeGrid packs={timeframes} active={tf} onSelect={setTf} />
-          <KeyLevels levels={levels} />
+          <TimeframeGrid packs={timeframes} active={tf} onSelect={setTf} digits={digits} />
+          <KeyLevels levels={levels} digits={digits} />
           <ChartPositions />
           <Button variant="outline" className="mt-auto" onClick={() => setOrderOpen(true)}>
             手动下单

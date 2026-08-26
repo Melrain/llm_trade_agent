@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
-import { Lock } from 'lucide-react'
+import { ChevronDown, Lock } from 'lucide-react'
+import { toast } from 'sonner'
 
 import {
   AlertDialog,
@@ -12,13 +13,20 @@ import {
   AlertDialogTitle
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { HealthDot } from '@/components/common/HealthDot'
 import { PnlText } from '@/components/common/PnlText'
 import { Segmented } from '@/components/common/Segmented'
-import { formatCountdown, formatNum, formatSignedPct, isWeekend, pnlTone } from '@/lib/format'
+import { formatCountdown, formatPrice, formatSignedPct, pnlTone } from '@/lib/format'
+import { toastAppliedSwitch } from '@/lib/notify'
 import { cn } from '@/lib/utils'
+import { assetShortName, feedStatusHint, venueFeedStatus } from '@/lib/venue-ui'
 import { useAgentStore, useAppStore, useMarketStore, useNewsStore } from '@/stores'
 import { HOLDING_INTERVAL_MS } from '../../../../preload/agent-types'
 import { accountModeFromTradeMode } from '../../../../preload/mt5-types'
@@ -33,21 +41,6 @@ function useNow(intervalMs = 1000): number {
   return now
 }
 
-function venueStatus(
-  ready: boolean,
-  lastError: string | null,
-  priceChangedAt: number | null,
-  now: number,
-  crypto24h: boolean
-): 'ok' | 'degraded' | 'error' | 'idle' {
-  if (lastError) return 'error'
-  if (!ready) return 'idle'
-  if (priceChangedAt != null && now - priceChangedAt < 10_000) return 'ok'
-  if (crypto24h) return 'degraded'
-  if (isWeekend()) return 'idle'
-  return 'degraded'
-}
-
 export function TopBar(): JSX.Element {
   const now = useNow()
   const setActivePage = useAppStore((s) => s.setActivePage)
@@ -58,6 +51,7 @@ export function TopBar(): JSX.Element {
   const ready = useMarketStore((s) => s.ready)
   const lastError = useMarketStore((s) => s.lastError)
   const priceChangedAt = useMarketStore((s) => s.priceChangedAt)
+  const digits = useMarketStore((s) => s.specs?.digits ?? 2)
   const h1 = useMarketStore((s) => s.timeframes.H1)
   const config = useAgentStore((s) => s.config)
   const records = useAgentStore((s) => s.records)
@@ -71,6 +65,7 @@ export function TopBar(): JSX.Element {
   const [needAccountOpen, setNeedAccountOpen] = useState(false)
   const [needOkxKeysOpen, setNeedOkxKeysOpen] = useState(false)
   const [liveConfirmOpen, setLiveConfirmOpen] = useState(false)
+  const [deskOpen, setDeskOpen] = useState(false)
   const [flash, setFlash] = useState<'up' | 'down' | null>(null)
   const prevMid = useRef<number | null>(null)
 
@@ -89,9 +84,10 @@ export function TopBar(): JSX.Element {
   const venue = config?.venue ?? 'mt5'
   const asset = config?.asset === 'ETH' ? 'ETH' : 'BTC'
   const okxDemo = config?.okx?.demo !== false
-  const feed = venueStatus(ready, lastError, priceChangedAt, now, true)
+  const feed = venueFeedStatus(ready, lastError, priceChangedAt, now)
   const equity = account?.equity ?? null
   const profit = account?.profit ?? null
+  const shortSymbol = assetShortName(symbol) === '—' ? asset : assetShortName(symbol)
 
   useEffect(() => {
     if (mid == null) return
@@ -102,6 +98,30 @@ export function TopBar(): JSX.Element {
     const t = window.setTimeout(() => setFlash(null), 300)
     return () => window.clearTimeout(t)
   }, [mid])
+
+  function applyAsset(next: TradeAsset): void {
+    if (next === asset) return
+    void saveConfig({ asset: next })
+    toastAppliedSwitch(next)
+    setDeskOpen(false)
+  }
+
+  function applyOkxDemo(next: boolean): void {
+    if (next === okxDemo) return
+    if (!next) {
+      if (!config?.okx?.hasLiveKeys) {
+        setNeedOkxKeysOpen(true)
+        setDeskOpen(false)
+        return
+      }
+      setLiveConfirmOpen(true)
+      setDeskOpen(false)
+      return
+    }
+    void saveConfig({ okxDemo: true })
+    toastAppliedSwitch('模拟盘')
+    setDeskOpen(false)
+  }
 
   const tradingSwitch = (
     <Switch
@@ -136,9 +156,9 @@ export function TopBar(): JSX.Element {
       <button
         type="button"
         onClick={() => setActivePage('chart')}
-        className="flex min-w-[196px] items-baseline gap-2 rounded-md px-1.5 py-1 text-left hover:bg-accent"
+        className="flex min-w-0 items-baseline gap-2 rounded-md px-1.5 py-1 text-left hover:bg-accent"
       >
-        <span className="text-[15px] font-medium text-muted-foreground">{symbol}</span>
+        <span className="text-[15px] font-medium text-muted-foreground">{shortSymbol}</span>
         <span
           className={cn(
             'font-mono text-[20px] font-semibold tabular-nums',
@@ -146,7 +166,7 @@ export function TopBar(): JSX.Element {
             flash === 'down' && 'text-red-400'
           )}
         >
-          {formatNum(mid)}
+          {formatPrice(mid, digits)}
         </span>
         <span className={cn('text-[15px] tabular-nums', pnlTone(change24h))}>
           {change24h != null && change24h > 0 ? '▲' : change24h != null && change24h < 0 ? '▼' : ''}
@@ -156,36 +176,56 @@ export function TopBar(): JSX.Element {
 
       <div className="h-6 w-px bg-border" />
 
-      <Segmented
-        value={asset}
-        disabled={saving || !config}
-        options={TRADE_ASSETS.map((id) => ({ value: id, label: id }))}
-        onChange={(next: TradeAsset) => {
-          if (next !== asset) void saveConfig({ asset: next })
-        }}
-      />
-
-      {venue === 'okx' && (
-        <Segmented
-          value={okxDemo ? 'demo' : 'live'}
-          disabled={saving || !config}
-          options={[
-            { value: 'demo', label: '模拟盘' },
-            { value: 'live', label: '实盘', danger: true }
-          ]}
-          onChange={(next) => {
-            if (next === 'demo') {
-              void saveConfig({ okxDemo: true })
-              return
-            }
-            if (!config?.okx?.hasLiveKeys) {
-              setNeedOkxKeysOpen(true)
-              return
-            }
-            setLiveConfirmOpen(true)
-          }}
-        />
-      )}
+      <Popover open={deskOpen} onOpenChange={setDeskOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            disabled={saving || !config}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[13px] hover:bg-accent disabled:opacity-50"
+          >
+            <span className="font-medium">{asset}</span>
+            {venue === 'okx' && (
+              <>
+                <span className="text-muted-foreground">·</span>
+                <span className={okxDemo ? 'text-cyan-300' : 'text-red-400'}>
+                  {okxDemo ? '模拟' : '实盘'}
+                </span>
+              </>
+            )}
+            <ChevronDown className="size-3.5 text-muted-foreground" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-64 p-3">
+          <p className="mb-1.5 text-[11px] text-muted-foreground">交易品种</p>
+          <Segmented
+            value={asset}
+            disabled={saving || !config}
+            options={TRADE_ASSETS.map((id) => ({ value: id, label: id }))}
+            onChange={applyAsset}
+          />
+          {venue === 'okx' ? (
+            <>
+              <p className="mb-1.5 mt-3 text-[11px] text-muted-foreground">盘口</p>
+              <Segmented
+                value={okxDemo ? 'demo' : 'live'}
+                disabled={saving || !config}
+                options={[
+                  { value: 'demo', label: '模拟盘' },
+                  { value: 'live', label: '实盘', danger: true }
+                ]}
+                onChange={(next) => applyOkxDemo(next === 'demo')}
+              />
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                切换立刻生效，并会关闭自动交易。
+              </p>
+            </>
+          ) : (
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              模拟 / 实盘由 MT5 终端登录账户决定。
+            </p>
+          )}
+        </PopoverContent>
+      </Popover>
 
       <div className="h-6 w-px bg-border" />
 
@@ -236,12 +276,20 @@ export function TopBar(): JSX.Element {
         <PnlText value={profit} withIcon className="text-[15px]" />
       </div>
 
-      <AccountBadge mode={accountMode} />
+      {venue === 'mt5' && <AccountBadge mode={accountMode} />}
 
-      <div className="flex items-center gap-1.5 text-[15px] text-muted-foreground">
-        <span>{venue === 'okx' ? 'OKX' : 'MT5'}</span>
-        <HealthDot status={feed} />
-      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-[15px] text-muted-foreground"
+          >
+            <span>{venue === 'okx' ? 'OKX' : 'MT5'}</span>
+            <HealthDot status={feed} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{feedStatusHint(feed, lastError)}</TooltipContent>
+      </Tooltip>
 
       <AlertDialog open={needKeyOpen} onOpenChange={setNeedKeyOpen}>
         <AlertDialogContent>
@@ -299,7 +347,10 @@ export function TopBar(): JSX.Element {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-500 text-white hover:bg-red-400"
-              onClick={() => void saveConfig({ okxDemo: false })}
+              onClick={() => {
+                void saveConfig({ okxDemo: false })
+                toastAppliedSwitch('实盘')
+              }}
             >
               确认切到实盘
             </AlertDialogAction>
@@ -313,7 +364,7 @@ export function TopBar(): JSX.Element {
             <AlertDialogTitle>尚未识别账户类型</AlertDialogTitle>
             <AlertDialogDescription>
               {venue === 'okx'
-                ? `请先在设置里填写当前${okxDemo ? '模拟盘' : '实盘'}的 OKX API Key / Secret / Passphrase，并点「测试连接」。等顶栏出现 DEMO 或 REAL 后再打开自动交易。`
+                ? `请先在设置里填写当前${okxDemo ? '模拟盘' : '实盘'}的 OKX API Key / Secret / Passphrase，并点「测试连接」。等连接成功后再打开自动交易。`
                 : '请先打开并登录 MetaTrader 5，等顶栏出现 DEMO 或 REAL 后再打开自动交易。账户切换后总闸也会自动关闭，需要重新确认。'}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -341,7 +392,10 @@ export function TopBar(): JSX.Element {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               className="bg-amber-500 text-black hover:bg-amber-400"
-              onClick={() => void saveConfig({ tradingEnabled: true, enabled: true })}
+              onClick={() => {
+                void saveConfig({ tradingEnabled: true, enabled: true })
+                toast.success('自动交易已开启')
+              }}
             >
               确认开启
             </AlertDialogAction>
@@ -354,7 +408,7 @@ export function TopBar(): JSX.Element {
 
 function formatMoneyish(value: number | null): string {
   if (value == null) return '—'
-  return `$${formatNum(value)}`
+  return `$${formatPrice(value, 2)}`
 }
 
 function AccountBadge({ mode }: { mode: 'demo' | 'real' | 'unknown' }): JSX.Element {
