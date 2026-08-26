@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useAgentStore, useNewsStore, usePmStore } from '@/stores'
+import { OKX_INST_PRESETS, type TradeVenue } from '../../../preload/okx-types'
 
 const INTERVALS = [
   { value: String(15 * 60 * 1000), label: '15 分钟' },
@@ -39,7 +40,17 @@ export function SettingsPage(): JSX.Element {
   const [maxVolume, setMaxVolume] = useState('0.1')
   const [riskPct, setRiskPct] = useState('1')
   const [fixedVolume, setFixedVolume] = useState('')
-  const [section, setSection] = useState<'llm' | 'decision' | 'risk' | 'data'>('llm')
+  const [section, setSection] = useState<'llm' | 'decision' | 'risk' | 'venue' | 'data'>('llm')
+  const [venue, setVenue] = useState<TradeVenue>('mt5')
+  const [okxInstId, setOkxInstId] = useState('BTC-USDT-SWAP')
+  const [okxDemo, setOkxDemo] = useState(true)
+  const [okxLeverage, setOkxLeverage] = useState('5')
+  const [okxTdMode, setOkxTdMode] = useState<'cross' | 'isolated'>('cross')
+  const [okxApiKey, setOkxApiKey] = useState('')
+  const [okxSecret, setOkxSecret] = useState('')
+  const [okxPassphrase, setOkxPassphrase] = useState('')
+  const [okxTest, setOkxTest] = useState<string | null>(null)
+  const [okxTesting, setOkxTesting] = useState(false)
 
   useEffect(() => {
     void loadFeeds()
@@ -47,6 +58,7 @@ export function SettingsPage(): JSX.Element {
 
   useEffect(() => {
     if (!config) return
+    /* eslint-disable react-hooks/set-state-in-effect -- 用已保存配置回填受控表单 */
     setBaseUrl(config.baseUrl)
     setModel(config.model)
     setTemperature(String(config.temperature))
@@ -55,6 +67,12 @@ export function SettingsPage(): JSX.Element {
     setMaxVolume(String(config.maxVolume))
     setRiskPct(String(Math.round(config.riskPct * 1000) / 10))
     setFixedVolume(config.fixedVolume == null ? '' : String(config.fixedVolume))
+    setVenue(config.venue ?? 'mt5')
+    setOkxInstId(config.okx?.instId ?? 'BTC-USDT-SWAP')
+    setOkxDemo(config.okx?.demo !== false)
+    setOkxLeverage(String(config.okx?.leverage ?? 5))
+    setOkxTdMode(config.okx?.tdMode === 'isolated' ? 'isolated' : 'cross')
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [config])
 
   const dirty = useMemo(() => {
@@ -69,7 +87,15 @@ export function SettingsPage(): JSX.Element {
       enabled !== config.enabled ||
       Number(maxVolume) !== config.maxVolume ||
       Number(riskPct) / 100 !== config.riskPct ||
-      (fixed ?? null) !== (config.fixedVolume ?? null)
+      (fixed ?? null) !== (config.fixedVolume ?? null) ||
+      venue !== (config.venue ?? 'mt5') ||
+      okxInstId !== (config.okx?.instId ?? 'BTC-USDT-SWAP') ||
+      okxDemo !== (config.okx?.demo !== false) ||
+      Number(okxLeverage) !== (config.okx?.leverage ?? 5) ||
+      okxTdMode !== (config.okx?.tdMode ?? 'cross') ||
+      okxApiKey.trim() !== '' ||
+      okxSecret.trim() !== '' ||
+      okxPassphrase.trim() !== ''
     )
   }, [
     config,
@@ -81,7 +107,15 @@ export function SettingsPage(): JSX.Element {
     enabled,
     maxVolume,
     riskPct,
-    fixedVolume
+    fixedVolume,
+    venue,
+    okxInstId,
+    okxDemo,
+    okxLeverage,
+    okxTdMode,
+    okxApiKey,
+    okxSecret,
+    okxPassphrase
   ])
 
   function save(): void {
@@ -96,11 +130,24 @@ export function SettingsPage(): JSX.Element {
       temperature: Number.isFinite(temp) ? temp : undefined,
       intervalMs: Number.isFinite(interval) ? interval : undefined,
       enabled,
+      venue,
+      okxInstId,
+      okxDemo,
+      okxTdMode,
+      ...(Number.isFinite(Number(okxLeverage)) ? { okxLeverage: Number(okxLeverage) } : {}),
       ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+      ...(okxApiKey.trim() ? { okxApiKey: okxApiKey.trim() } : {}),
+      ...(okxSecret.trim() ? { okxSecret: okxSecret.trim() } : {}),
+      ...(okxPassphrase.trim() ? { okxPassphrase: okxPassphrase.trim() } : {}),
       ...(Number.isFinite(max) ? { maxVolume: max } : {}),
       ...(Number.isFinite(pct) ? { riskPct: pct / 100 } : {}),
       fixedVolume: fixed != null && Number.isFinite(fixed) ? fixed : null
-    }).then(() => setApiKey(''))
+    }).then(() => {
+      setApiKey('')
+      setOkxApiKey('')
+      setOkxSecret('')
+      setOkxPassphrase('')
+    })
   }
 
   return (
@@ -109,6 +156,7 @@ export function SettingsPage(): JSX.Element {
         {(
           [
             ['llm', 'LLM'],
+            ['venue', '交易场所'],
             ['decision', '决策周期'],
             ['risk', '风控'],
             ['data', '数据源']
@@ -158,6 +206,132 @@ export function SettingsPage(): JSX.Element {
           </div>
         )}
 
+        {section === 'venue' && (
+          <div className="grid max-w-xl gap-4">
+            <Field label="交易场所" hint="切换后会关闭自动交易总闸，需要重新确认。">
+              <Select value={venue} onValueChange={(v) => setVenue(v as TradeVenue)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mt5">MT5 · XAUUSD</SelectItem>
+                  <SelectItem value="okx">OKX · USDT 永续</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            {venue === 'okx' && (
+              <>
+                <Field label="合约">
+                  <Select value={okxInstId} onValueChange={setOkxInstId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OKX_INST_PRESETS.map((id) => (
+                        <SelectItem key={id} value={id}>
+                          {id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                  <div>
+                    <p className="text-[13px]">模拟盘</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      打开后走 OKX 模拟交易（x-simulated-trading）。需要单独的模拟盘 API Key。
+                    </p>
+                  </div>
+                  <Switch checked={okxDemo} onCheckedChange={setOkxDemo} />
+                </div>
+                <Field label="杠杆" hint="下单前会按此杠杆设置。建议先用 3–10x。">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={125}
+                    step={1}
+                    value={okxLeverage}
+                    onChange={(e) => setOkxLeverage(e.target.value)}
+                  />
+                </Field>
+                <Field label="保证金模式">
+                  <Select
+                    value={okxTdMode}
+                    onValueChange={(v) => setOkxTdMode(v === 'isolated' ? 'isolated' : 'cross')}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cross">全仓 cross</SelectItem>
+                      <SelectItem value="isolated">逐仓 isolated</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field
+                  label="OKX API Key"
+                  hint={
+                    config?.okx?.hasKeys
+                      ? '已保存，留空不改'
+                      : 'API Key / Secret / Passphrase 都要填'
+                  }
+                >
+                  <Input
+                    type="password"
+                    value={okxApiKey}
+                    placeholder={config?.okx?.hasKeys ? '已保存' : 'API Key'}
+                    onChange={(e) => setOkxApiKey(e.target.value)}
+                  />
+                </Field>
+                <Field label="OKX Secret">
+                  <Input
+                    type="password"
+                    value={okxSecret}
+                    placeholder={config?.okx?.hasKeys ? '已保存' : 'Secret'}
+                    onChange={(e) => setOkxSecret(e.target.value)}
+                  />
+                </Field>
+                <Field label="OKX Passphrase">
+                  <Input
+                    type="password"
+                    value={okxPassphrase}
+                    placeholder={config?.okx?.hasKeys ? '已保存' : 'Passphrase'}
+                    onChange={(e) => setOkxPassphrase(e.target.value)}
+                  />
+                </Field>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={okxTesting}
+                    onClick={() => {
+                      setOkxTesting(true)
+                      setOkxTest(null)
+                      void window.api.okx
+                        .test()
+                        .then((res) => {
+                          setOkxTest(
+                            res.ok
+                              ? `连接成功 · uid ${res.uid ?? '—'} · ${res.posMode} · ${res.demo ? '模拟盘' : '实盘'}`
+                              : `连接失败：${res.error}`
+                          )
+                        })
+                        .catch((error) => {
+                          setOkxTest(error instanceof Error ? error.message : String(error))
+                        })
+                        .finally(() => setOkxTesting(false))
+                    }}
+                  >
+                    {okxTesting ? '测试中…' : '测试连接'}
+                  </Button>
+                  {okxTest && <p className="text-[11px] text-muted-foreground">{okxTest}</p>}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {section === 'decision' && (
           <div className="grid max-w-xl gap-4">
             <Field label="决策周期">
@@ -189,13 +363,17 @@ export function SettingsPage(): JSX.Element {
         {section === 'risk' && (
           <div className="grid max-w-xl gap-4">
             <Field
-              label="手数上限"
-              hint="单笔最大手数，风控覆盖 LLM 给出的 volume 时也不会超过此值"
+              label={venue === 'okx' ? '张数上限' : '手数上限'}
+              hint={
+                venue === 'okx'
+                  ? '单笔最大合约张数。风控覆盖 LLM 给出的 volume 时也不会超过此值'
+                  : '单笔最大手数，风控覆盖 LLM 给出的 volume 时也不会超过此值'
+              }
             >
               <Input
                 type="number"
                 min={0.01}
-                max={1}
+                max={venue === 'okx' ? 100 : 1}
                 step={0.01}
                 value={maxVolume}
                 onChange={(e) => setMaxVolume(e.target.value)}
@@ -203,7 +381,11 @@ export function SettingsPage(): JSX.Element {
             </Field>
             <Field
               label="单笔风险 %"
-              hint="单笔风险占净值百分比，将由 SL 距离反推手数并覆盖 LLM 给的值"
+              hint={
+                venue === 'okx'
+                  ? '单笔风险占净值百分比，将由 SL 距离反推张数并覆盖 LLM 给的值'
+                  : '单笔风险占净值百分比，将由 SL 距离反推手数并覆盖 LLM 给的值'
+              }
             >
               <Input
                 type="number"
@@ -214,11 +396,14 @@ export function SettingsPage(): JSX.Element {
                 onChange={(e) => setRiskPct(e.target.value)}
               />
             </Field>
-            <Field label="固定手数" hint="留空则按风险自动计算。填写后仍不会超过上限和单笔风险">
+            <Field
+              label={venue === 'okx' ? '固定张数' : '固定手数'}
+              hint="留空则按风险自动计算。填写后仍不会超过上限和单笔风险"
+            >
               <Input
                 type="number"
                 min={0.01}
-                max={1}
+                max={venue === 'okx' ? 100 : 1}
                 step={0.01}
                 value={fixedVolume}
                 placeholder="自动"

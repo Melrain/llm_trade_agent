@@ -14,7 +14,15 @@ const idleConfig: AgentPublicConfig = {
   hasApiKey: false,
   maxVolume: 0.1,
   riskPct: 0.01,
-  fixedVolume: null
+  fixedVolume: null,
+  venue: 'mt5',
+  okx: {
+    instId: 'BTC-USDT-SWAP',
+    demo: true,
+    leverage: 5,
+    tdMode: 'cross',
+    hasKeys: false
+  }
 }
 
 let subscribed = false

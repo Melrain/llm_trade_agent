@@ -8,7 +8,8 @@ import type { MarketCollector } from '../collectors/market'
 import type { NewsCollector } from '../collectors/news'
 import type { PolymarketCollector } from '../collectors/polymarket'
 import type { Mt5Client } from '../mt5/client'
-import { getPublicConfig } from '../agent/config'
+import { getPublicConfig, getVenue } from '../agent/config'
+import type { OkxClient } from '../okx/client'
 import { buildDecisionSnapshot } from './builder'
 import { startOfLocalDaySec, sumRealizedPnl } from './daily-pnl'
 
@@ -63,7 +64,8 @@ export class SnapshotService {
     private readonly market: MarketCollector,
     private readonly pm: PolymarketCollector,
     private readonly news: NewsCollector,
-    private readonly mt5: Mt5Client
+    private readonly mt5: Mt5Client,
+    private readonly okx?: OkxClient
   ) {}
 
   start(): void {
@@ -131,6 +133,7 @@ export class SnapshotService {
     try {
       const realized = await this.realizedPnl()
       const risk = getPublicConfig()
+      const venue = getVenue()
       this.snapshot = buildDecisionSnapshot({
         market: this.market.getSnapshot(),
         pm: this.pm.getSnapshot('XAUUSD'),
@@ -138,7 +141,8 @@ export class SnapshotService {
         dailyPnlRealized: realized,
         maxVolume: risk.maxVolume,
         riskPct: risk.riskPct,
-        fixedVolume: risk.fixedVolume
+        fixedVolume: risk.fixedVolume,
+        venue
       })
       this.persist(false)
       this.emit()
@@ -151,6 +155,22 @@ export class SnapshotService {
   private async realizedPnl(): Promise<number | null> {
     const now = Date.now()
     if (now - this.pnlCache.at < PNL_TTL_MS) return this.pnlCache.value
+    if (getVenue() === 'okx') {
+      if (!this.okx?.hasKeys()) {
+        this.pnlCache = { at: now, value: this.pnlCache.value }
+        return this.pnlCache.value
+      }
+      try {
+        const fromMs = startOfLocalDaySec(now) * 1000
+        const bills = await this.okx.getBills(fromMs, now)
+        const value = bills.reduce((sum, row) => sum + row.pnl + row.fee, 0)
+        this.pnlCache = { at: now, value }
+        return value
+      } catch {
+        this.pnlCache = { at: now, value: this.pnlCache.value }
+        return this.pnlCache.value
+      }
+    }
     try {
       const fromSec = startOfLocalDaySec(now)
       const toSec = Math.floor(now / 1000)

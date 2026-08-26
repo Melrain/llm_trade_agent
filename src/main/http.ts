@@ -14,6 +14,8 @@ class NonRetryableHttpError extends Error {
 export type FetchJsonOptions = {
   method?: 'GET' | 'POST'
   body?: unknown
+  /** 已序列化的请求体；签名场景必须与 OK-ACCESS-SIGN 用同一份字符串 */
+  bodyText?: string
   timeoutMs?: number
   retries?: number
   headers?: Record<string, string>
@@ -64,10 +66,12 @@ async function fetchRaw(url: string, opts?: FetchJsonOptions): Promise<Response>
         headers: {
           'User-Agent': opts?.userAgent ?? 'LLA-Market-Desktop/0.1',
           Accept: opts?.headers?.Accept ?? 'application/json',
-          ...(opts?.body != null ? { 'Content-Type': 'application/json' } : {}),
+          ...(opts?.body != null || opts?.bodyText != null
+            ? { 'Content-Type': 'application/json' }
+            : {}),
           ...opts?.headers
         },
-        body: opts?.body != null ? JSON.stringify(opts.body) : undefined
+        body: opts?.bodyText ?? (opts?.body != null ? JSON.stringify(opts.body) : undefined)
       })
 
       if (!res.ok) {

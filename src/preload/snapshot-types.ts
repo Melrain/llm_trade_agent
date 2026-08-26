@@ -78,8 +78,9 @@ export type DecisionSnapshot = {
     snapshotId: string
     symbol: string
     generatedAt: string
-    /** MT5 K 线时间为经纪商服务器时间，ISO 里的 Z 不代表 UTC */
-    barTime: 'mt5-server'
+    /** MT5 K 线时间为经纪商服务器时间；OKX 为 UTC */
+    barTime: 'mt5-server' | 'utc'
+    venue?: 'mt5' | 'okx'
   }
   sources: {
     market: SnapshotSourceStatus

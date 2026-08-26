@@ -26,7 +26,7 @@ export function PositionsTable({ positions }: { positions: MarketPositionRow[] }
         <TableRow>
           <TableHead className="h-8">单号</TableHead>
           <TableHead className="h-8">方向</TableHead>
-          <TableHead className="h-8">手数</TableHead>
+          <TableHead className="h-8">数量</TableHead>
           <TableHead className="h-8">开仓价</TableHead>
           <TableHead className="h-8">浮盈</TableHead>
           <TableHead className="h-8">SL</TableHead>

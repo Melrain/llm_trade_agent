@@ -46,6 +46,7 @@ export type MarketPositionRow = {
 }
 
 export type MarketSnapshot = {
+  venue?: 'mt5' | 'okx'
   symbol: string
   asOf: string | null
   ready: boolean

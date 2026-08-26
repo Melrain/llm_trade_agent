@@ -21,16 +21,19 @@ import {
   type Mt5TradeRequest
 } from '../../preload/mt5-types'
 import type { DecisionSnapshot } from '../../preload/snapshot-types'
+import type { OkxOrderResult, OkxTradeIntent } from '../../preload/okx-types'
 import type { Mt5Client } from '../mt5/client'
+import type { OkxClient } from '../okx/client'
+import { buildOkxIntent } from '../okx/order-builder'
 import type { SnapshotService } from '../snapshot/service'
 import { chatCompletions } from './client'
-import { disarmIfAccountDrift, getApiKey, getPublicConfig } from './config'
+import { disarmIfAccountDrift, getApiKey, getPublicConfig, getVenue } from './config'
 import { decideSendGate, isCheckOk } from './gate'
 import { notify } from './notify'
 import { buildTradeRequest, withFilling } from './order-builder'
 import {
   loadSystemPrompt,
-  PROMPT_VERSION,
+  promptVersion,
   renderRecentDecisions,
   renderSnapshotMarkdown
 } from './prompt'
@@ -128,7 +131,8 @@ export class AgentEngine {
 
   constructor(
     private readonly snapshots: SnapshotService,
-    private readonly mt5: Mt5Client
+    private readonly mt5: Mt5Client,
+    private readonly okx?: OkxClient
   ) {}
 
   start(): void {
@@ -232,7 +236,7 @@ export class AgentEngine {
         record.check ? `check ${record.check.retcode}` : '',
         record.send ? `send ${record.send.retcode}` : '',
         record.tokens ? `tokens ${record.tokens.total}` : '',
-        PROMPT_VERSION
+        record.promptVersion
       )
       return record
     } finally {
@@ -243,13 +247,14 @@ export class AgentEngine {
   private async execute(): Promise<AgentRecord> {
     const snapshot = await this.snapshots.refresh()
     const cfg = getPublicConfig()
+    const venue = getVenue()
     const symbol = snapshot.meta.symbol
     const base = {
       id: randomUUID(),
       snapshotId: snapshot.meta.snapshotId,
       symbol,
       createdAt: new Date().toISOString(),
-      promptVersion: PROMPT_VERSION,
+      promptVersion: promptVersion(venue),
       model: cfg.model,
       tokens: null as AgentRecord['tokens']
     }
@@ -298,7 +303,7 @@ export class AgentEngine {
     }
 
     appendSnapshotLog(snapshot)
-    const system = loadSystemPrompt()
+    const system = loadSystemPrompt(venue)
     const history = renderRecentDecisions(this.records)
     const user = history
       ? `${renderSnapshotMarkdown(snapshot)}\n\n${history}`
@@ -394,6 +399,10 @@ export class AgentEngine {
     snapshot: DecisionSnapshot,
     sizedVolume: number | null
   ): Promise<AgentRecord> {
+    if (getVenue() === 'okx') {
+      return this.withOkxPreview(record, snapshot, sizedVolume)
+    }
+
     let intendedRequest: Mt5TradeRequest | null = null
     let check: AgentOrderCheck | null = null
     let send: AgentOrderSend | null = null
@@ -518,12 +527,190 @@ export class AgentEngine {
     return { request: current, check }
   }
 
+  private async withOkxPreview(
+    record: Omit<AgentRecord, 'sizedVolume' | 'intendedRequest' | 'check' | 'send' | 'execution'> &
+      Partial<AgentRecord>,
+    snapshot: DecisionSnapshot,
+    sizedVolume: number | null
+  ): Promise<AgentRecord> {
+    let intendedOkxRequest: OkxTradeIntent | null = null
+    let check: AgentOrderCheck | null = null
+    let send: AgentOrderSend | null = null
+    let execution: AgentExecution = { status: 'preview', reason: '总闸关闭' }
+
+    this.guardArmedAccount(snapshot)
+    const cfg = getPublicConfig(accountModeFromTradeMode(snapshot.account?.tradeMode))
+
+    if (record.riskVerdict === 'pass' && record.decision.action !== 'hold' && !record.skipped) {
+      intendedOkxRequest = buildOkxIntent(record.decision, snapshot, sizedVolume, {
+        tdMode: cfg.okx.tdMode,
+        leverage: cfg.okx.leverage,
+        promptVersion: record.promptVersion
+      })
+      if (intendedOkxRequest) {
+        check = this.checkOkx(intendedOkxRequest, snapshot)
+        this.guardArmedAccount(snapshot)
+        const liveCfg = getPublicConfig(accountModeFromTradeMode(snapshot.account?.tradeMode))
+        const gate = decideSendGate({
+          tradingEnabled: liveCfg.tradingEnabled,
+          accountMode: liveCfg.accountMode,
+          checkRetcode: check.retcode
+        })
+        if (gate.send) {
+          try {
+            send = await this.sendOkx(intendedOkxRequest)
+            if (isTradeSuccess(send.retcode)) {
+              execution = {
+                status: 'sent',
+                reason: `已成交 ${send.volume ?? ''} @ ${send.price ?? ''}`.trim()
+              }
+            } else {
+              execution = {
+                status: 'rejected',
+                reason: `发单失败 ${send.retcode} ${send.comment}`.trim()
+              }
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message.split('\n')[0] : String(error)
+            send = {
+              retcode: -1,
+              deal: null,
+              order: null,
+              volume: null,
+              price: null,
+              comment: message
+            }
+            execution = {
+              status: 'rejected',
+              reason: `发单异常：${message}（订单状态未知，请核对 OKX 持仓）`
+            }
+          }
+          await this.snapshots.refresh().catch(() => undefined)
+        } else {
+          execution = { status: gate.status, reason: gate.reason }
+        }
+      } else {
+        execution = { status: 'skipped', reason: '无法组单' }
+      }
+    } else if (record.decision.action === 'hold' && record.riskVerdict === 'pass') {
+      execution = { status: 'preview', reason: '观望，不组单' }
+    } else {
+      execution = {
+        status: 'preview',
+        reason: record.riskReason ?? record.skipped ?? '风控拒绝'
+      }
+    }
+
+    if (execution.status === 'sent') {
+      notify(
+        'order-sent',
+        '已发单',
+        `${record.decision.action} ${send?.volume ?? sizedVolume ?? ''} @ ${send?.price ?? ''}`.trim()
+      )
+    } else if (execution.status === 'rejected') {
+      notify('order-failed', '发单失败', execution.reason)
+    } else if (
+      cfg.tradingEnabled &&
+      record.riskReason &&
+      /当日亏损|今日开仓|连续亏损/.test(record.riskReason)
+    ) {
+      notify(`halt:${record.riskReason}`, '风控熔断', record.riskReason, 30 * 60_000)
+    }
+
+    return {
+      ...record,
+      sizedVolume,
+      intendedRequest: null,
+      intendedOkxRequest,
+      check,
+      send,
+      execution
+    }
+  }
+
+  private checkOkx(intent: OkxTradeIntent, snapshot: DecisionSnapshot): AgentOrderCheck {
+    if (!this.okx?.hasKeys()) {
+      return { retcode: -1, comment: '尚未配置 OKX API Key', margin: null, marginFree: null }
+    }
+    if (intent.kind === 'place' && (!intent.sz || Number(intent.sz) <= 0)) {
+      return { retcode: -1, comment: '张数无效', margin: null, marginFree: null }
+    }
+    return {
+      retcode: 0,
+      comment: 'OKX 本地预检通过',
+      margin: null,
+      marginFree: snapshot.account?.marginFree ?? null
+    }
+  }
+
+  private async sendOkx(intent: OkxTradeIntent): Promise<AgentOrderSend> {
+    if (!this.okx) throw new Error('OKX 客户端未初始化')
+    let result: OkxOrderResult
+    if (intent.kind === 'place') {
+      result = await withTimeout(
+        this.okx.placeOrder({
+          instId: intent.instId,
+          side: intent.side ?? 'buy',
+          sz: intent.sz ?? '0',
+          ordType: 'market',
+          tdMode: intent.tdMode,
+          posSide: intent.posSide,
+          clOrdId: intent.clOrdId,
+          lever: intent.lever,
+          sl: intent.sl,
+          tp: intent.tp
+        }),
+        SEND_TIMEOUT_MS,
+        'okx.placeOrder'
+      )
+    } else if (intent.kind === 'close') {
+      result = await withTimeout(
+        this.okx.closePosition(intent.instId, intent.tdMode, intent.posSide),
+        SEND_TIMEOUT_MS,
+        'okx.closePosition'
+      )
+    } else {
+      const pending = await this.okx.listPendingAlgos(intent.instId)
+      const ids = pending
+        .map((row) => (typeof row.algoId === 'string' ? row.algoId : ''))
+        .filter(Boolean)
+      if (ids.length) await this.okx.cancelAlgos(intent.instId, ids)
+      result = await withTimeout(
+        this.okx.placeAlgoSlTp({
+          instId: intent.instId,
+          tdMode: intent.tdMode,
+          side: intent.side ?? 'sell',
+          sz: intent.sz ?? '0',
+          sl: intent.sl,
+          tp: intent.tp,
+          posSide: intent.posSide
+        }),
+        SEND_TIMEOUT_MS,
+        'okx.placeAlgoSlTp'
+      )
+    }
+    const ord = result.ordId ? Number(result.ordId) : NaN
+    return {
+      retcode: result.code === '0' ? 0 : Number(result.sCode ?? result.code) || -1,
+      deal: Number.isFinite(ord) ? ord : null,
+      order: Number.isFinite(ord) ? ord : null,
+      volume: intent.sz != null ? Number(intent.sz) : null,
+      price: result.avgPx,
+      comment: result.sMsg || result.msg || 'OKX'
+    }
+  }
+
   private async reconcileTick(): Promise<void> {
     if (this.reconciling) return
     this.reconciling = true
     try {
-      await this.reconcileOutcomesOnce()
-      await this.manageBreakeven()
+      if (getVenue() === 'okx') {
+        await this.reconcileOkxOnce()
+        await this.manageOkxBreakeven()
+      } else {
+        await this.reconcileOutcomesOnce()
+        await this.manageBreakeven()
+      }
     } catch (error) {
       console.warn('[agent] 对账失败', error instanceof Error ? error.message : error)
     } finally {
@@ -636,6 +823,120 @@ export class AgentEngine {
         comment: error instanceof Error ? error.message.split('\n')[0] : String(error),
         margin: null,
         marginFree: null
+      }
+    }
+  }
+
+  private async reconcileOkxOnce(): Promise<void> {
+    if (!this.okx?.hasKeys()) return
+    const pending = this.records.filter((row) => {
+      if (row.execution?.status !== 'sent') return false
+      const { action } = row.decision
+      if (action !== 'open_buy' && action !== 'open_sell') return false
+      return row.outcome?.status !== 'closed'
+    })
+    if (pending.length === 0) return
+
+    const instId = pending[0]?.symbol
+    const positions = await withTimeout(
+      this.okx.getPositions(instId),
+      CHECK_TIMEOUT_MS,
+      'okx.positions'
+    )
+    const earliest = Math.min(...pending.map((row) => Date.parse(row.createdAt)))
+    const bills = await withTimeout(
+      this.okx.getBills(Math.max(0, earliest - 3_600_000)),
+      CHECK_TIMEOUT_MS,
+      'okx.bills'
+    )
+    const updated: AgentRecord[] = []
+    for (const row of pending) {
+      const want = row.decision.action === 'open_buy' ? 'buy' : 'sell'
+      const stillOpen = positions.some((pos) => {
+        const type = pos.posSide === 'short' || pos.pos < 0 ? 'sell' : 'buy'
+        return type === want
+      })
+      if (stillOpen) continue
+      const created = Date.parse(row.createdAt)
+      const related = bills.filter(
+        (bill) => bill.ts >= created - 60_000 && (!bill.instId || bill.instId === row.symbol)
+      )
+      const pnl = related.reduce((sum, bill) => sum + bill.pnl + bill.fee, 0)
+      const lastTs = related.reduce((max, bill) => Math.max(max, bill.ts), created)
+      updated.push({
+        ...row,
+        outcome: {
+          status: 'closed',
+          positionId: row.send?.order ?? null,
+          closedAt: new Date(lastTs).toISOString(),
+          closePrice: null,
+          pnl
+        }
+      })
+    }
+    if (updated.length === 0) return
+    const byId = new Map(updated.map((row) => [row.id, row]))
+    this.records = this.records.map((row) => byId.get(row.id) ?? row)
+    updateStoredRecords(byId)
+    this.emit()
+    for (const row of updated) {
+      const pnl = row.outcome?.pnl ?? 0
+      notify(
+        `closed:${row.id}`,
+        '仓位已平',
+        `${row.decision.action === 'open_buy' ? '多' : '空'}单已平，盈亏 ${pnl > 0 ? '+' : ''}${pnl}`
+      )
+    }
+  }
+
+  private async manageOkxBreakeven(): Promise<void> {
+    if (!this.okx?.hasKeys()) return
+    const snapshot = this.snapshots.getSnapshot()
+    this.guardArmedAccount(snapshot)
+    const cfg = getPublicConfig(accountModeFromTradeMode(snapshot.account?.tradeMode))
+    if (!cfg.tradingEnabled || cfg.accountMode === 'unknown') return
+
+    const atr = snapshot.technical?.timeframes.H1?.atr14
+    const bid = snapshot.technical?.price.bid
+    const ask = snapshot.technical?.price.ask
+    if (atr == null || atr <= 0 || bid == null || ask == null) return
+
+    for (const pos of snapshot.account?.positions ?? []) {
+      const buy = pos.type === 'buy'
+      const gain = buy ? bid - pos.priceOpen : pos.priceOpen - ask
+      if (gain < BREAKEVEN_ATR * atr) continue
+      const alreadySafe = buy
+        ? pos.sl > 0 && pos.sl >= pos.priceOpen
+        : pos.sl > 0 && pos.sl <= pos.priceOpen
+      if (alreadySafe) continue
+      if (buy && pos.priceOpen >= bid) continue
+      if (!buy && pos.priceOpen <= ask) continue
+      try {
+        const pending = await this.okx.listPendingAlgos(snapshot.meta.symbol)
+        const ids = pending
+          .map((row) => (typeof row.algoId === 'string' ? row.algoId : ''))
+          .filter(Boolean)
+        if (ids.length) await this.okx.cancelAlgos(snapshot.meta.symbol, ids)
+        const send = await this.okx.placeAlgoSlTp({
+          instId: snapshot.meta.symbol,
+          tdMode: cfg.okx.tdMode,
+          side: buy ? 'sell' : 'buy',
+          sz: String(pos.volume),
+          sl: pos.priceOpen,
+          tp: pos.tp > 0 ? pos.tp : undefined,
+          posSide: buy ? 'long' : 'short'
+        })
+        if (send.code === '0') {
+          console.log('[agent] OKX 保本止损', pos.ticket, '→', pos.priceOpen)
+          notify(
+            `breakeven:${pos.ticket}`,
+            '已移动止损保本',
+            `#${pos.ticket} SL → ${pos.priceOpen}`
+          )
+          await this.snapshots.refresh().catch(() => undefined)
+        }
+      } catch (error) {
+        console.warn('[agent] OKX 保本失败', error instanceof Error ? error.message : error)
       }
     }
   }

@@ -168,6 +168,7 @@ export function tagLabel(tag: string): string {
   if (tag === 'cpi') return '通胀'
   if (tag === 'nfp') return '非农'
   if (tag === 'gold') return '黄金'
+  if (tag === 'crypto') return '加密'
   if (tag === 'geo') return '地缘'
   if (tag === 'usd') return '美元'
   return tag

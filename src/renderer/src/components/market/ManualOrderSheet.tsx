@@ -20,7 +20,7 @@ import {
   isTradeSuccess,
   type Mt5TradeRequest
 } from '../../../../preload/mt5-types'
-import { useMarketStore } from '@/stores'
+import { useAgentStore, useMarketStore } from '@/stores'
 
 type Pending = {
   side: 'buy' | 'sell'
@@ -38,6 +38,8 @@ export function ManualOrderSheet({
   const symbol = useMarketStore((s) => s.symbol)
   const price = useMarketStore((s) => s.price)
   const specs = useMarketStore((s) => s.specs)
+  const venue = useAgentStore((s) => s.config?.venue ?? 'mt5')
+  const okx = useAgentStore((s) => s.config?.okx)
   const [volume, setVolume] = useState('0.01')
   const [sl, setSl] = useState('')
   const [tp, setTp] = useState('')
@@ -68,13 +70,24 @@ export function ManualOrderSheet({
   async function preview(side: 'buy' | 'sell'): Promise<void> {
     const request = buildRequest(side)
     if (!request) {
-      setLog('手数或价格无效')
+      setLog(venue === 'okx' ? '张数或价格无效' : '手数或价格无效')
       return
     }
     setBusy(true)
     setLog(null)
     setPending(null)
     try {
+      if (venue === 'okx') {
+        if (!okx?.hasKeys) {
+          setLog('尚未配置 OKX API Key')
+          return
+        }
+        setPending({ side, request, comment: 'OKX 市价单预览' })
+        setLog(
+          `预览：${side === 'buy' ? '买' : '卖'} ${volume} 张 @ ${formatNum(side === 'buy' ? price?.ask : price?.bid)} · 确认后发到 OKX`
+        )
+        return
+      }
       const check = await window.api.mt5.order_check(request)
       const ok = check.retcode === 0 || isTradeSuccess(check.retcode)
       if (!ok) {
@@ -96,12 +109,30 @@ export function ManualOrderSheet({
     if (!pending) return
     setBusy(true)
     try {
-      const send = await window.api.mt5.order_send(pending.request)
-      setLog(
-        isTradeSuccess(send.retcode)
-          ? `已发单 ${send.order} @ ${send.price}`
-          : `发单失败 ${send.retcode} ${send.comment}`
-      )
+      if (venue === 'okx') {
+        const result = await window.api.okx.placeOrder({
+          instId: symbol,
+          side: pending.side,
+          sz: String(pending.request.volume),
+          ordType: 'market',
+          tdMode: okx?.tdMode ?? 'cross',
+          lever: String(okx?.leverage ?? 5),
+          sl: pending.request.sl || undefined,
+          tp: pending.request.tp || undefined
+        })
+        setLog(
+          result.code === '0'
+            ? `已发单 ${result.ordId ?? ''} @ ${result.avgPx ?? ''}`
+            : `发单失败 ${result.sCode ?? result.code} ${result.sMsg || result.msg}`
+        )
+      } else {
+        const send = await window.api.mt5.order_send(pending.request)
+        setLog(
+          isTradeSuccess(send.retcode)
+            ? `已发单 ${send.order} @ ${send.price}`
+            : `发单失败 ${send.retcode} ${send.comment}`
+        )
+      }
       setPending(null)
     } catch (error) {
       setLog(error instanceof Error ? error.message : String(error))
@@ -125,12 +156,12 @@ export function ManualOrderSheet({
         <SheetHeader>
           <SheetTitle>手动下单</SheetTitle>
           <SheetDescription>
-            逃生门。先做经纪商检查，确认预览后再发单。买 {formatNum(price?.ask)} / 卖{' '}
-            {formatNum(price?.bid)}
+            逃生门。先预览再发单。买 {formatNum(price?.ask)} / 卖 {formatNum(price?.bid)}
+            {venue === 'okx' ? ' · 发到 OKX' : ' · 发到 MT5'}
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-3 px-4">
-          <Field label="手数">
+          <Field label={venue === 'okx' ? '张数' : '手数'}>
             <Input value={volume} onChange={(e) => setVolume(e.target.value)} />
           </Field>
           <Field label="止损（空=无）">

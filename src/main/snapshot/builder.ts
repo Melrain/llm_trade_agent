@@ -11,7 +11,8 @@ import type {
   SnapshotSourceStatus,
   SnapshotTimeframe
 } from '../../preload/snapshot-types'
-import { isGoldRelevant } from '../collectors/news/rss'
+import { isCryptoRelevant, isGoldRelevant } from '../collectors/news/rss'
+import type { TradeVenue } from '../../preload/okx-types'
 
 const DEFAULT_MAX_VOLUME = 0.1
 const DEFAULT_RISK_PCT = 0.01
@@ -33,6 +34,7 @@ export type BuilderInput = {
   maxVolume?: number
   riskPct?: number
   fixedVolume?: number | null
+  venue?: TradeVenue
 }
 
 function round(value: number | null | undefined, digits: number): number | null {
@@ -45,22 +47,22 @@ function roundReq(value: number, digits: number): number {
   return round(value, digits) ?? 0
 }
 
-function packTf(pack: MarketTimeframePack | null): SnapshotTimeframe | null {
+function packTf(pack: MarketTimeframePack | null, digits: number): SnapshotTimeframe | null {
   if (!pack) return null
   return {
-    ema20: round(pack.ema20, 2),
-    ema50: round(pack.ema50, 2),
-    ema200: round(pack.ema200, 2),
+    ema20: round(pack.ema20, digits),
+    ema50: round(pack.ema50, digits),
+    ema200: round(pack.ema200, digits),
     rsi14: round(pack.rsi14, 1),
-    atr14: round(pack.atr14, 2),
+    atr14: round(pack.atr14, digits),
     trend: pack.trend,
     pctChange24h: round(pack.pctChange24h, 4),
     recentBars: pack.recentBars.slice(-BARS_PER_TF).map((bar): SnapshotBar => ({
       t: bar.t,
-      o: roundReq(bar.o, 2),
-      h: roundReq(bar.h, 2),
-      l: roundReq(bar.l, 2),
-      c: roundReq(bar.c, 2)
+      o: roundReq(bar.o, digits),
+      h: roundReq(bar.h, digits),
+      l: roundReq(bar.l, digits),
+      c: roundReq(bar.c, digits)
     }))
   }
 }
@@ -92,17 +94,24 @@ function compactPm(pm: PmSnapshot): SnapshotPmMarket[] {
 function haltReason(
   market: MarketSnapshot,
   calendar: SnapshotCalendarItem[],
-  now: number
+  now: number,
+  venue: TradeVenue
 ): string | null {
   if (!market.ready) return '技术面未就绪'
   if (market.priceChangedAt != null && now - market.priceChangedAt > PRICE_STALE_MS) {
-    return '价格超过 5 分钟未变动，疑似休市'
+    return venue === 'okx'
+      ? '价格超过 5 分钟未变动，行情可能中断'
+      : '价格超过 5 分钟未变动，疑似休市'
   }
   const atrH1 = market.timeframes.H1?.atr14
   const spread = market.price?.spread
+  const mid = market.price?.mid
   if (atrH1 != null && atrH1 > 0 && spread != null) {
-    const cap = Math.max(SPREAD_FLOOR, atrH1 * SPREAD_ATR_RATIO)
-    if (spread > cap) return `点差异常（${spread.toFixed(2)} > ${cap.toFixed(2)}）`
+    const cap =
+      venue === 'okx'
+        ? Math.max(atrH1 * SPREAD_ATR_RATIO, mid != null && mid > 0 ? mid * 0.003 : 0)
+        : Math.max(SPREAD_FLOOR, atrH1 * SPREAD_ATR_RATIO)
+    if (spread > cap) return `点差异常（${spread.toFixed(4)} > ${cap.toFixed(4)}）`
   }
   const soon = calendar.find((event) => {
     if (event.impact !== 'high') return false
@@ -116,6 +125,8 @@ function haltReason(
 export function buildDecisionSnapshot(input: BuilderInput): DecisionSnapshot {
   const now = input.now ?? Date.now()
   const { market, pm, news, dailyPnlRealized } = input
+  const venue: TradeVenue = input.venue ?? market.venue ?? 'mt5'
+  const digits = market.specs?.digits ?? 2
   const floating = market.account?.profit ?? 0
   const dailyPnl = dailyPnlRealized == null ? null : round(dailyPnlRealized + floating, 2)
 
@@ -130,15 +141,18 @@ export function buildDecisionSnapshot(input: BuilderInput): DecisionSnapshot {
     actual: event.actual
   }))
 
-  const halted = haltReason(market, calendar, now)
-  const headlines = news.headlines.filter(isGoldRelevant).slice(0, 8)
+  const halted = haltReason(market, calendar, now, venue)
+  const headlines = news.headlines
+    .filter(venue === 'okx' ? isCryptoRelevant : isGoldRelevant)
+    .slice(0, 8)
 
   return {
     meta: {
       snapshotId: randomUUID(),
-      symbol: market.symbol || pm.symbol || 'XAUUSD',
+      symbol: market.symbol || (venue === 'okx' ? 'BTC-USDT-SWAP' : 'XAUUSD'),
       generatedAt: new Date(now).toISOString(),
-      barTime: 'mt5-server'
+      barTime: venue === 'okx' ? 'utc' : 'mt5-server',
+      venue
     },
     sources: {
       market: sourceOf(market.ready, market.lastError),
@@ -172,10 +186,10 @@ export function buildDecisionSnapshot(input: BuilderInput): DecisionSnapshot {
             ticket: pos.ticket,
             type: pos.type,
             volume: roundReq(pos.volume, 2),
-            priceOpen: roundReq(pos.priceOpen, 2),
+            priceOpen: roundReq(pos.priceOpen, digits),
             profit: roundReq(pos.profit, 2),
-            sl: roundReq(pos.sl, 2),
-            tp: roundReq(pos.tp, 2),
+            sl: roundReq(pos.sl, digits),
+            tp: roundReq(pos.tp, digits),
             magic: pos.magic
           }))
         }
@@ -183,21 +197,21 @@ export function buildDecisionSnapshot(input: BuilderInput): DecisionSnapshot {
     technical: market.price
       ? {
           price: {
-            bid: roundReq(market.price.bid, 2),
-            ask: roundReq(market.price.ask, 2),
-            mid: roundReq(market.price.mid, 2),
-            spread: roundReq(market.price.spread, 2)
+            bid: roundReq(market.price.bid, digits),
+            ask: roundReq(market.price.ask, digits),
+            mid: roundReq(market.price.mid, digits),
+            spread: roundReq(market.price.spread, digits)
           },
           timeframes: {
-            M15: packTf(market.timeframes.M15),
-            H1: packTf(market.timeframes.H1),
-            H4: packTf(market.timeframes.H4),
-            D1: packTf(market.timeframes.D1)
+            M15: packTf(market.timeframes.M15, digits),
+            H1: packTf(market.timeframes.H1, digits),
+            H4: packTf(market.timeframes.H4, digits),
+            D1: packTf(market.timeframes.D1, digits)
           },
           levels: market.levels.map((level) => ({
             id: level.id,
-            high: roundReq(level.high, 2),
-            low: roundReq(level.low, 2),
+            high: roundReq(level.high, digits),
+            low: roundReq(level.low, digits),
             pos: round(level.pos, 3)
           }))
         }

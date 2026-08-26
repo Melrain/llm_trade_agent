@@ -5,6 +5,7 @@ import type { NewsApi } from './news-types'
 import type { PmApi } from './pm-types'
 import type { AgentApi } from './agent-types'
 import type { SnapshotApi } from './snapshot-types'
+import type { OkxApi } from './okx-types'
 
 export type {
   Mt5AccountInfo,
@@ -66,6 +67,17 @@ export type {
 } from './snapshot-types'
 
 export type {
+  OkxApi,
+  OkxConnectionTest,
+  OkxOrderResult,
+  OkxPlaceOrderInput,
+  OkxPublicConfig,
+  OkxTdMode,
+  OkxTradeIntent,
+  TradeVenue
+} from './okx-types'
+
+export type {
   AgentAction,
   AgentApi,
   AgentConfigPatch,
@@ -82,6 +94,7 @@ export type {
 
 export type LlaMarketApi = {
   mt5: Mt5Api
+  okx: OkxApi
   pm: PmApi
   market: MarketApi
   news: NewsApi

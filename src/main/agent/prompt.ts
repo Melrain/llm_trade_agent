@@ -3,6 +3,7 @@ import { join } from 'path'
 import { app } from 'electron'
 
 import type { AgentRecord } from '../../preload/agent-types'
+import type { TradeVenue } from '../../preload/okx-types'
 import type { DecisionSnapshot, SnapshotBar, SnapshotTimeframe } from '../../preload/snapshot-types'
 
 const TREND: Record<string, string> = {
@@ -40,6 +41,11 @@ function tf(name: string, pack: SnapshotTimeframe | null): string {
 }
 
 export const PROMPT_VERSION = 'trader-v1.3'
+export const OKX_PROMPT_VERSION = 'trader-okx-v1.0'
+
+export function promptVersion(venue: TradeVenue = 'mt5'): string {
+  return venue === 'okx' ? OKX_PROMPT_VERSION : PROMPT_VERSION
+}
 
 const ACTION_ZH: Record<string, string> = {
   open_buy: '开多',
@@ -58,7 +64,7 @@ export function renderRecentDecisions(records: AgentRecord[], max = 5): string {
     const time = r.createdAt.slice(11, 16)
     const extra =
       d.action === 'open_buy' || d.action === 'open_sell'
-        ? ` · ${d.volume ?? '—'} 手 · SL ${d.sl ?? '—'}`
+        ? ` · ${d.volume ?? '—'} · SL ${d.sl ?? '—'}`
         : ''
     let outcome: string
     if (r.riskVerdict !== 'pass') {
@@ -79,18 +85,19 @@ export function renderRecentDecisions(records: AgentRecord[], max = 5): string {
   ].join('\n')
 }
 
-function promptPath(): string {
+function promptPath(venue: TradeVenue = 'mt5'): string {
+  const file = venue === 'okx' ? 'trader-okx-v1.md' : 'trader-v1.md'
   if (app.isPackaged) {
-    const extra = join(process.resourcesPath, 'prompts', 'trader-v1.md')
+    const extra = join(process.resourcesPath, 'prompts', file)
     if (existsSync(extra)) return extra
   }
-  const fromApp = join(app.getAppPath(), 'resources', 'prompts', 'trader-v1.md')
+  const fromApp = join(app.getAppPath(), 'resources', 'prompts', file)
   if (existsSync(fromApp)) return fromApp
-  return join(__dirname, '../../resources/prompts/trader-v1.md')
+  return join(__dirname, '../../resources/prompts', file)
 }
 
-export function loadSystemPrompt(): string {
-  const path = promptPath()
+export function loadSystemPrompt(venue: TradeVenue = 'mt5'): string {
+  const path = promptPath(venue)
   if (!existsSync(path)) {
     throw new Error(`缺少 prompt 文件: ${path}`)
   }
@@ -100,9 +107,13 @@ export function loadSystemPrompt(): string {
 export function renderSnapshotMarkdown(snapshot: DecisionSnapshot): string {
   const { account, technical, constraints } = snapshot
   const lines: string[] = [
-    `# 黄金快照 ${snapshot.meta.symbol}`,
+    snapshot.meta.venue === 'okx'
+      ? `# OKX 永续快照 ${snapshot.meta.symbol}`
+      : `# 黄金快照 ${snapshot.meta.symbol}`,
     `生成 ${snapshot.meta.generatedAt}`,
-    `K 线时间为经纪商服务器时间（${snapshot.meta.barTime}），不是 UTC。日历为 UTC。`,
+    snapshot.meta.venue === 'okx'
+      ? `K 线时间为 UTC（${snapshot.meta.barTime}）。日历为 UTC。`
+      : `K 线时间为经纪商服务器时间（${snapshot.meta.barTime}），不是 UTC。日历为 UTC。`,
     `数据源 技术面=${snapshot.sources.market} 预测市场=${snapshot.sources.polymarket} 新闻=${snapshot.sources.news} 日历=${snapshot.sources.calendar}`,
     '',
     '## 账户',
@@ -120,8 +131,10 @@ export function renderSnapshotMarkdown(snapshot: DecisionSnapshot): string {
     '',
     '## 约束',
     `maxVolume ${constraints.maxVolume} · volumeMin ${constraints.volumeMin} · volumeStep ${constraints.volumeStep} · 合约 ${constraints.contractSize}`,
-    `单笔风险 ${((constraints.riskPct ?? 0.01) * 100).toFixed(1)}%${constraints.fixedVolume != null ? ` · 固定手数 ${constraints.fixedVolume}` : ' · 手数按风险自动算'}`,
-    '开仓手数由风控覆盖，你给的 volume 只作参考。',
+    `单笔风险 ${((constraints.riskPct ?? 0.01) * 100).toFixed(1)}%${constraints.fixedVolume != null ? ` · 固定数量 ${constraints.fixedVolume}` : ' · 数量按风险自动算'}`,
+    snapshot.meta.venue === 'okx'
+      ? '开仓张数由风控覆盖，你给的 volume 只作参考（单位：合约张）。'
+      : '开仓手数由风控覆盖，你给的 volume 只作参考。',
     `过夜费 多 ${constraints.swapLong} / 空 ${constraints.swapShort}`,
     `可开方向 ${constraints.allowedDirections.join(',') || '无'}（多空均可，不要默认只做多） · 暂停开仓 ${constraints.tradingHalted ? constraints.haltReason : '否'}`,
     ''

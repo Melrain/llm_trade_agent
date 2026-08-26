@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 
 import type { AgentConfigPatch, AgentRecord } from '../../preload/agent-types'
+import type { TradeVenue } from '../../preload/okx-types'
 import { accountModeFromTradeMode } from '../../preload/mt5-types'
 import type { SnapshotService } from '../snapshot/service'
 import { getPublicConfig, setConfig } from './config'
@@ -35,6 +36,14 @@ function asPatch(raw: unknown): AgentConfigPatch {
   if (typeof row.riskPct === 'number') patch.riskPct = row.riskPct
   if (row.fixedVolume === null) patch.fixedVolume = null
   else if (typeof row.fixedVolume === 'number') patch.fixedVolume = row.fixedVolume
+  if (row.venue === 'mt5' || row.venue === 'okx') patch.venue = row.venue as TradeVenue
+  if (typeof row.okxInstId === 'string') patch.okxInstId = row.okxInstId
+  if (typeof row.okxDemo === 'boolean') patch.okxDemo = row.okxDemo
+  if (typeof row.okxLeverage === 'number') patch.okxLeverage = row.okxLeverage
+  if (row.okxTdMode === 'cross' || row.okxTdMode === 'isolated') patch.okxTdMode = row.okxTdMode
+  if (typeof row.okxApiKey === 'string') patch.okxApiKey = row.okxApiKey
+  if (typeof row.okxSecret === 'string') patch.okxSecret = row.okxSecret
+  if (typeof row.okxPassphrase === 'string') patch.okxPassphrase = row.okxPassphrase
   return patch
 }
 
@@ -59,10 +68,17 @@ export function registerAgentIpc(engine: AgentEngine, snapshots: SnapshotService
   ipcMain.handle('agent:getConfig', () => getPublicConfig(accountMode()))
   ipcMain.handle('agent:stats', () => computeStats(loadAllRecords()))
   ipcMain.handle('agent:setConfig', (_event, raw: unknown) => {
-    const next = setConfig(asPatch(raw), accountMode(), login())
+    const prev = getPublicConfig(accountMode())
+    const patch = asPatch(raw)
+    const next = setConfig(patch, accountMode(), login())
     engine.syncTimer()
-    // 手数/风险等约束进快照，但不必为改配置重拉一遍行情
-    void snapshots.rebuildFromCache()
+    const relink =
+      prev.venue !== next.venue ||
+      prev.okx.instId !== next.okx.instId ||
+      prev.okx.demo !== next.okx.demo ||
+      Boolean(patch.okxApiKey || patch.okxSecret || patch.okxPassphrase)
+    if (relink) void snapshots.refresh()
+    else void snapshots.rebuildFromCache()
     return next
   })
 }

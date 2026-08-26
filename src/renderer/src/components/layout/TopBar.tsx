@@ -31,15 +31,17 @@ function useNow(intervalMs = 1000): number {
   return now
 }
 
-function mt5Status(
+function venueStatus(
   ready: boolean,
   lastError: string | null,
   priceChangedAt: number | null,
-  now: number
+  now: number,
+  crypto24h: boolean
 ): 'ok' | 'degraded' | 'error' | 'idle' {
   if (lastError) return 'error'
   if (!ready) return 'idle'
   if (priceChangedAt != null && now - priceChangedAt < 10_000) return 'ok'
+  if (crypto24h) return 'degraded'
   if (isWeekend()) return 'idle'
   return 'degraded'
 }
@@ -80,7 +82,8 @@ export function TopBar(): JSX.Element {
   const remainMs =
     enabled && lastDecision ? Date.parse(lastDecision.createdAt) + effectiveMs - now : 0
   const haltWindow = calendar.some((ev) => ev.impact === 'high' && ev.soon)
-  const mt5 = mt5Status(ready, lastError, priceChangedAt, now)
+  const venue = config?.venue ?? 'mt5'
+  const feed = venueStatus(ready, lastError, priceChangedAt, now, venue === 'okx')
   const equity = account?.equity ?? null
   const profit = account?.profit ?? null
 
@@ -107,6 +110,10 @@ export function TopBar(): JSX.Element {
         }
         if (!config?.hasApiKey) {
           setNeedKeyOpen(true)
+          return
+        }
+        if (venue === 'okx' && !config?.okx?.hasKeys) {
+          setNeedAccountOpen(true)
           return
         }
         if (accountMode === 'unknown') {
@@ -193,8 +200,8 @@ export function TopBar(): JSX.Element {
       <AccountBadge mode={accountMode} />
 
       <div className="flex items-center gap-1.5 text-[15px] text-muted-foreground">
-        <span>MT5</span>
-        <HealthDot status={mt5} />
+        <span>{venue === 'okx' ? 'OKX' : 'MT5'}</span>
+        <HealthDot status={feed} />
       </div>
 
       <AlertDialog open={needKeyOpen} onOpenChange={setNeedKeyOpen}>
@@ -224,8 +231,9 @@ export function TopBar(): JSX.Element {
           <AlertDialogHeader>
             <AlertDialogTitle>尚未识别账户类型</AlertDialogTitle>
             <AlertDialogDescription>
-              请先打开并登录 MetaTrader 5，等顶栏出现 DEMO 或 REAL
-              后再打开自动交易。账户切换后总闸也会自动关闭，需要重新确认。
+              {venue === 'okx'
+                ? '请先在设置里填写 OKX API Key / Secret / Passphrase，并点「测试连接」。等顶栏出现 DEMO 或 REAL 后再打开自动交易。'
+                : '请先打开并登录 MetaTrader 5，等顶栏出现 DEMO 或 REAL 后再打开自动交易。账户切换后总闸也会自动关闭，需要重新确认。'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -240,8 +248,12 @@ export function TopBar(): JSX.Element {
             <AlertDialogTitle>打开自动交易总闸？</AlertDialogTitle>
             <AlertDialogDescription>
               {accountMode === 'real'
-                ? '当前是 REAL 实盘账户。打开后将用真实资金自动下单，可能造成本金亏损。请确认手数与风险上限已经设好。'
-                : '将同时启动 Agent 决策循环，并允许在当前 Demo 账户自动下单。这是高危操作。'}
+                ? venue === 'okx'
+                  ? '当前是 OKX 实盘。打开后将用真实资金自动下单，可能造成本金亏损。请确认张数、杠杆与风险上限已经设好。'
+                  : '当前是 REAL 实盘账户。打开后将用真实资金自动下单，可能造成本金亏损。请确认手数与风险上限已经设好。'
+                : venue === 'okx'
+                  ? '将同时启动 Agent 决策循环，并允许在当前 OKX 模拟盘自动下单。这是高危操作。'
+                  : '将同时启动 Agent 决策循环，并允许在当前 Demo 账户自动下单。这是高危操作。'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

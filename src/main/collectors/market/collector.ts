@@ -10,6 +10,7 @@ import type {
   Mt5Rate,
   Mt5SymbolInfo
 } from '../../../preload/mt5-types'
+import { ACCOUNT_TRADE_MODE_DEMO, ACCOUNT_TRADE_MODE_REAL } from '../../../preload/mt5-types'
 import {
   atr,
   ema,
@@ -19,8 +20,20 @@ import {
   rsiWilder,
   trendFromEmas
 } from '../../indicators'
+import { AGENT_MAGIC } from '../../../preload/agent-types'
+import { getPublicConfig, getVenue } from '../../agent/config'
 import type { Mt5Client } from '../../mt5/client'
+import type { OkxClient } from '../../okx/client'
+import { posIdToTicket } from '../../okx/normalize'
+import { okxPositionType } from '../../okx/order-builder'
 import { fetchGoldSpotFromMt5 } from '../polymarket/spot-mt5'
+
+const OKX_BARS: Record<MarketTimeframeId, string> = {
+  M15: '15m',
+  H1: '1H',
+  H4: '4H',
+  D1: '1Dutc'
+}
 
 type Listener = (snapshot: MarketSnapshot) => void
 
@@ -39,9 +52,10 @@ function emptyTimeframes(): MarketSnapshot['timeframes'] {
   return { M15: null, H1: null, H4: null, D1: null }
 }
 
-function emptySnapshot(): MarketSnapshot {
+function emptySnapshot(symbol = 'XAUUSD', venue: 'mt5' | 'okx' = 'mt5'): MarketSnapshot {
   return {
-    symbol: 'XAUUSD',
+    venue,
+    symbol,
     asOf: null,
     ready: false,
     lastError: null,
@@ -133,7 +147,10 @@ export class MarketCollector {
   private lastPriceKey: string | null = null
   private lastPriceChangeAt: number | null = null
 
-  constructor(private readonly mt5: Mt5Client) {}
+  constructor(
+    private readonly mt5: Mt5Client,
+    private readonly okx?: OkxClient
+  ) {}
 
   start(): void {
     if (this.started) return
@@ -184,7 +201,10 @@ export class MarketCollector {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (message.includes('未就绪')) {
-        this.snapshot = { ...emptySnapshot(), lastError: null }
+        this.snapshot = {
+          ...emptySnapshot(this.snapshot.symbol, this.snapshot.venue),
+          lastError: null
+        }
         return
       }
       this.snapshot = { ...this.snapshot, ready: false, lastError: message }
@@ -193,6 +213,170 @@ export class MarketCollector {
   }
 
   private async buildSnapshot(): Promise<MarketSnapshot> {
+    if (getVenue() === 'okx') {
+      return this.buildOkxSnapshot()
+    }
+    return this.buildMt5Snapshot()
+  }
+
+  private async buildOkxSnapshot(): Promise<MarketSnapshot> {
+    if (!this.okx) {
+      return {
+        ...emptySnapshot(getPublicConfig().okx.instId, 'okx'),
+        lastError: 'OKX 客户端未初始化'
+      }
+    }
+    const instId = getPublicConfig().okx.instId
+    const [ticker, spec, funding, ...candleRows] = await Promise.all([
+      this.okx.getTicker(instId),
+      this.okx.getInstrumentSpec(instId),
+      this.okx.getFundingRate(instId),
+      ...TIMEFRAMES.map((tf) =>
+        this.okx!.getCandles(instId, OKX_BARS[tf], RATE_COUNT).catch(() => [])
+      )
+    ])
+
+    const timeframes = emptyTimeframes()
+    TIMEFRAMES.forEach((tf, i) => {
+      const candles = candleRows[i] ?? []
+      timeframes[tf] = packRates(
+        candles.map((c) => ({
+          time: c.ts,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+          tick_volume: 0,
+          spread: 0
+        })),
+        tf
+      )
+    })
+
+    const bid = ticker.bid
+    const ask = ticker.ask
+    const mid = ticker.mid
+    const spread = ask - bid
+    const priceKey = `${bid}|${ask}|okx|${instId}`
+    if (priceKey !== this.lastPriceKey) {
+      this.lastPriceKey = priceKey
+      this.lastPriceChangeAt = Date.now()
+    }
+
+    const h1Rates = (candleRows[TIMEFRAMES.indexOf('H1')] ?? []).map((c) => ({
+      time: c.ts,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      tick_volume: 0,
+      spread: 0
+    }))
+    const h4Rates = (candleRows[TIMEFRAMES.indexOf('H4')] ?? []).map((c) => ({
+      time: c.ts,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      tick_volume: 0,
+      spread: 0
+    }))
+    const d1Rates = (candleRows[TIMEFRAMES.indexOf('D1')] ?? []).map((c) => ({
+      time: c.ts,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      tick_volume: 0,
+      spread: 0
+    }))
+
+    let account: MarketSnapshot['account'] = null
+    let positions: MarketSnapshot['positions'] = []
+    if (this.okx.hasKeys()) {
+      try {
+        const [balance, rawPositions, cfg] = await Promise.all([
+          this.okx.getBalance(),
+          this.okx.getPositions(instId),
+          this.okx.getAccountConfig()
+        ])
+        const usdt = balance.details.find((d) => d.ccy === 'USDT')
+        const equity = usdt?.eq || balance.totalEq
+        const loginRaw = Number(cfg.uid)
+        account = {
+          balance: usdt?.eq ?? balance.totalEq,
+          equity,
+          marginFree: usdt?.availEq || balance.availEq,
+          profit: usdt?.upl ?? balance.upl,
+          currency: 'USDT',
+          tradeMode: getPublicConfig().okx.demo ? ACCOUNT_TRADE_MODE_DEMO : ACCOUNT_TRADE_MODE_REAL,
+          tradeAllowed: true,
+          login:
+            Number.isFinite(loginRaw) && loginRaw > 0 ? loginRaw : posIdToTicket(cfg.uid ?? instId),
+          server: getPublicConfig().okx.demo ? 'OKX-DEMO' : 'OKX'
+        }
+        positions = rawPositions.map((p) => ({
+          ticket: posIdToTicket(p.posId),
+          type: okxPositionType(p.pos, p.posSide),
+          volume: Math.abs(p.pos),
+          priceOpen: p.avgPx,
+          priceCurrent: p.last || mid,
+          profit: p.upl,
+          swap: 0,
+          sl: p.slTriggerPx ?? 0,
+          tp: p.tpTriggerPx ?? 0,
+          magic: AGENT_MAGIC
+        }))
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return {
+          venue: 'okx',
+          symbol: instId,
+          asOf: new Date().toISOString(),
+          ready: timeframes.H1 != null && timeframes.D1 != null,
+          lastError: message,
+          priceChangedAt: this.lastPriceChangeAt,
+          price: { bid, ask, mid, spread },
+          swap: { long: funding, short: funding },
+          specs: {
+            volumeMin: spec.minSz,
+            volumeStep: spec.lotSz,
+            contractSize: spec.ctVal,
+            fillingMode: null,
+            digits: spec.digits
+          },
+          timeframes,
+          levels: buildLevels(h1Rates, h4Rates, d1Rates, mid),
+          account: null,
+          positions: []
+        }
+      }
+    }
+
+    return {
+      venue: 'okx',
+      symbol: instId,
+      asOf: new Date().toISOString(),
+      ready: Number.isFinite(bid) && timeframes.H1 != null && timeframes.D1 != null,
+      lastError: null,
+      priceChangedAt: this.lastPriceChangeAt,
+      price: { bid, ask, mid, spread },
+      swap: { long: funding, short: funding },
+      specs: {
+        volumeMin: spec.minSz,
+        volumeStep: spec.lotSz,
+        contractSize: spec.ctVal,
+        fillingMode: null,
+        digits: spec.digits
+      },
+      timeframes,
+      levels: buildLevels(h1Rates, h4Rates, d1Rates, mid),
+      account,
+      positions
+    }
+  }
+
+  private async buildMt5Snapshot(): Promise<MarketSnapshot> {
     const tick = await fetchGoldSpotFromMt5(this.mt5, this.goldSymbol)
     this.goldSymbol = tick.symbol
 
@@ -237,6 +421,7 @@ export class MarketCollector {
     const levels = buildLevels(h1Rates, h4Rates, d1Rates, mid)
 
     return {
+      venue: 'mt5',
       symbol: tick.symbol,
       asOf: new Date().toISOString(),
       // 有现价且核心周期指标齐备才算就绪，避免模型在缺技术面的情况下决策

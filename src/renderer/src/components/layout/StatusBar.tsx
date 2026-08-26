@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { formatRelative, formatTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { useMarketStore, useNewsStore, usePmStore, useSnapshotStore } from '@/stores'
+import { useAgentStore, useMarketStore, useNewsStore, usePmStore, useSnapshotStore } from '@/stores'
 
 type SourceItem = {
   id: string
@@ -23,6 +23,7 @@ export function StatusBar(): JSX.Element {
   const pm = usePmStore()
   const snapshot = useSnapshotStore((s) => s.current)
   const refreshSnapshot = useSnapshotStore((s) => s.refresh)
+  const venue = useAgentStore((s) => s.config?.venue ?? 'mt5')
 
   const staleQuotes = pm.quotes.filter((q) => q.stale).length
   const pmStatus: HealthStatus =
@@ -53,8 +54,8 @@ export function StatusBar(): JSX.Element {
 
   const items: SourceItem[] = [
     {
-      id: 'mt5',
-      label: 'MT5',
+      id: 'venue',
+      label: venue === 'okx' ? 'OKX' : 'MT5',
       status: marketStatus,
       detail: market.lastError,
       asOf: market.asOf,

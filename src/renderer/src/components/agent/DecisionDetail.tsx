@@ -118,7 +118,7 @@ export function DecisionDetail({ row }: { row: AgentRecord | null }): JSX.Elemen
         <RiskVerdictBadge verdict={row.riskVerdict} reason={row.riskReason} />
         {row.sizedVolume != null && (
           <p className="mt-2 text-[15px] text-muted-foreground">
-            模型手数 {row.decision?.volume ?? '—'} → 风控覆盖 {row.sizedVolume} 手
+            模型数量 {row.decision?.volume ?? '—'} → 风控覆盖 {row.sizedVolume}
           </p>
         )}
       </Section>

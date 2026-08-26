@@ -13,10 +13,12 @@ const TAG_RULES: Array<{ tag: string; re: RegExp }> = [
   { tag: 'nfp', re: /\b(nfp|non[-\s]?farm|payrolls?|unemployment claims)\b/i },
   { tag: 'gold', re: /\b(gold|xau|bullion|xauusd)\b/i },
   { tag: 'geo', re: /\b(iran|israel|hormuz|ukraine|taiwan|ceasefire|geopolit|strait)\b/i },
-  { tag: 'usd', re: /\b(dxy|us dollar|u\.s\. dollar|treasury|10-?year yield)\b/i }
+  { tag: 'usd', re: /\b(dxy|us dollar|u\.s\. dollar|treasury|10-?year yield)\b/i },
+  { tag: 'crypto', re: /\b(bitcoin|btc|ethereum|eth|crypto|okx|binance|solana|sol|perpetual)\b/i }
 ]
 
 const KEEP_TAGS = new Set(['gold', 'geo', 'fed', 'nfp'])
+const CRYPTO_KEEP_TAGS = new Set(['crypto', 'btc', 'eth', 'fed', 'geo', 'cpi', 'nfp', 'usd'])
 
 function codePoint(value: number): string {
   try {
@@ -94,6 +96,10 @@ export function tagHeadline(title: string, summary: string): string[] {
 
 export function isGoldRelevant(item: Pick<NewsHeadline, 'tags'>): boolean {
   return item.tags.some((tag) => KEEP_TAGS.has(tag))
+}
+
+export function isCryptoRelevant(item: Pick<NewsHeadline, 'tags'>): boolean {
+  return item.tags.some((tag) => CRYPTO_KEEP_TAGS.has(tag))
 }
 
 export function selectHeadlines(items: NewsHeadline[], now = Date.now(), max = 8): NewsHeadline[] {

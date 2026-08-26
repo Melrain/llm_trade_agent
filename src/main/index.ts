@@ -9,14 +9,17 @@ import { Mt5Client } from './mt5/client'
 import { registerMt5Ipc } from './mt5/ipc'
 import { SnapshotService, registerSnapshotIpc } from './snapshot'
 import { AgentEngine, registerAgentIpc } from './agent'
+import { getOkxCredentials } from './agent/config'
+import { OkxClient, registerOkxIpc } from './okx'
 import { closeDb, openDb } from './db'
 
 const mt5 = new Mt5Client()
+const okx = new OkxClient(() => getOkxCredentials())
 const pm = new PolymarketCollector(mt5)
-const market = new MarketCollector(mt5)
+const market = new MarketCollector(mt5, okx)
 const news = new NewsCollector()
-const snapshot = new SnapshotService(market, pm, news, mt5)
-const agent = new AgentEngine(snapshot, mt5)
+const snapshot = new SnapshotService(market, pm, news, mt5, okx)
+const agent = new AgentEngine(snapshot, mt5, okx)
 
 let mainWindow: BrowserWindow | null = null
 
@@ -101,6 +104,7 @@ if (!app.requestSingleInstanceLock()) {
       }
     }
     registerMt5Ipc(mt5)
+    registerOkxIpc(okx)
     registerPmIpc(pm)
     registerMarketIpc(market)
     registerNewsIpc(news)
