@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 
-import { clampDigits, formatFunding, formatSpread } from './format'
+import { clampDigits, formatFunding, formatSpread } from './format.ts'
 import {
   PRICE_STALE_MS,
   assetShortName,
@@ -8,7 +8,7 @@ import {
   venueFeedStatus,
   volumeLabel,
   volumeUnit
-} from './venue-ui'
+} from './venue-ui.ts'
 
 assert.equal(venueFeedStatus(true, 'OKX 401', Date.now(), Date.now()), 'error')
 assert.equal(venueFeedStatus(false, null, null, Date.now()), 'idle')

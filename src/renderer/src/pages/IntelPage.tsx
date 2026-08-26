@@ -28,10 +28,7 @@ export function IntelPage(): JSX.Element {
           {pmLoading && quotes.length === 0 ? (
             <p className="text-[13px] text-muted-foreground">正在解析市场…</p>
           ) : quotes.length === 0 ? (
-            <EmptyState
-              title="暂无宏观盘口"
-              hint="这里不是现货行情。检查 watch 配置或网络。"
-            />
+            <EmptyState title="暂无宏观盘口" hint="这里不是现货行情。检查 watch 配置或网络。" />
           ) : (
             <div className="space-y-3">
               {quotes.map((quote) => (

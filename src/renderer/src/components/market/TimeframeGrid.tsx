@@ -1,6 +1,13 @@
 import type { JSX } from 'react'
 
-import { formatNum, formatPrice, formatSignedPct, pnlTone, timeframeLabel, trendLabel } from '@/lib/format'
+import {
+  formatNum,
+  formatPrice,
+  formatSignedPct,
+  pnlTone,
+  timeframeLabel,
+  trendLabel
+} from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { MarketTimeframeId, MarketTimeframePack } from '../../../../preload/market-types'
 
@@ -55,8 +62,8 @@ export function TimeframeGrid({
       {active && packs[active] && (
         <p className="mt-1 text-[11px] text-muted-foreground">
           24h {formatSignedPct(packs[active]?.pctChange24h)} · EMA{' '}
-          {formatPrice(packs[active]?.ema20, digits)} / {formatPrice(packs[active]?.ema50, digits)} /{' '}
-          {formatPrice(packs[active]?.ema200, digits)}
+          {formatPrice(packs[active]?.ema20, digits)} / {formatPrice(packs[active]?.ema50, digits)}{' '}
+          / {formatPrice(packs[active]?.ema200, digits)}
         </p>
       )}
     </section>

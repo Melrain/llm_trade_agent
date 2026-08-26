@@ -74,8 +74,9 @@ export function ChartPositions(): JSX.Element {
                 </span>
               </div>
               <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                开 {formatPrice(pos.priceOpen, digits)} · SL {pos.sl ? formatPrice(pos.sl, digits) : '—'} ·
-                TP {pos.tp ? formatPrice(pos.tp, digits) : '—'}
+                开 {formatPrice(pos.priceOpen, digits)} · SL{' '}
+                {pos.sl ? formatPrice(pos.sl, digits) : '—'} · TP{' '}
+                {pos.tp ? formatPrice(pos.tp, digits) : '—'}
               </p>
               <div className="mt-2 flex gap-1.5">
                 <Button

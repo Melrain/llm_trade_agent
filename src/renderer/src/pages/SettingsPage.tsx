@@ -53,13 +53,13 @@ export function SettingsPage(): JSX.Element {
   const [maxVolume, setMaxVolume] = useState('0.1')
   const [riskPct, setRiskPct] = useState('1')
   const [fixedVolume, setFixedVolume] = useState('')
-  const [section, setSection] = useState<
-    'llm' | 'decision' | 'risk' | 'venue' | 'data' | 'about'
-  >(() => {
-    if (sessionStorage.getItem('settings-section') !== 'about') return 'llm'
-    sessionStorage.removeItem('settings-section')
-    return 'about'
-  })
+  const [section, setSection] = useState<'llm' | 'decision' | 'risk' | 'venue' | 'data' | 'about'>(
+    () => {
+      if (sessionStorage.getItem('settings-section') !== 'about') return 'llm'
+      sessionStorage.removeItem('settings-section')
+      return 'about'
+    }
+  )
   const [venue, setVenue] = useState<TradeVenue>('mt5')
   const [okxLeverage, setOkxLeverage] = useState('5')
   const [okxTdMode, setOkxTdMode] = useState<'cross' | 'isolated'>('cross')
@@ -268,10 +268,7 @@ export function SettingsPage(): JSX.Element {
         {section === 'venue' && (
           <div className="grid max-w-xl gap-4">
             <Field label="交易场所" hint="立刻生效，并会关闭自动交易总闸。" applied>
-              <Select
-                value={venue}
-                onValueChange={(v) => switchVenue(v as TradeVenue)}
-              >
+              <Select value={venue} onValueChange={(v) => switchVenue(v as TradeVenue)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -587,7 +584,7 @@ export function SettingsPage(): JSX.Element {
         {section !== 'about' && dirty && (
           <div className="pointer-events-none sticky bottom-0 mt-8 flex justify-end bg-gradient-to-t from-background via-background to-transparent pt-6">
             <Button className="pointer-events-auto" disabled={saving} onClick={save}>
-              {saving ? '保存中…' : '保存未写入项'}
+              {saving ? '保存中…' : '保存'}
             </Button>
           </div>
         )}

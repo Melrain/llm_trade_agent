@@ -43,7 +43,7 @@ export function ManualOrderSheet({
   const okx = useAgentStore((s) => s.config?.okx)
   const digits = specs?.digits ?? 2
   const unit = volumeUnit(venue)
-  const contractName = venue === 'okx' ? (okx?.instId || symbol) : symbol
+  const contractName = venue === 'okx' ? okx?.instId || symbol : symbol
   const [volume, setVolume] = useState('0.01')
   const [sl, setSl] = useState('')
   const [tp, setTp] = useState('')

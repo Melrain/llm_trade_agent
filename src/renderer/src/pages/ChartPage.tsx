@@ -212,9 +212,7 @@ export function ChartPage(): JSX.Element {
     <div className="flex h-full flex-col">
       <div className="flex h-10 shrink-0 items-center gap-3 border-b border-border px-3">
         <span className="text-[13px] font-medium">{assetShortName(symbol)}</span>
-        {venue === 'okx' && (
-          <span className="text-[11px] text-muted-foreground">{symbol}</span>
-        )}
+        {venue === 'okx' && <span className="text-[11px] text-muted-foreground">{symbol}</span>}
         <div className="flex rounded-md bg-muted p-0.5">
           {(['M15', 'H1', 'H4', 'D1'] as MarketTimeframeId[]).map((id) => (
             <button
