@@ -22,6 +22,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { toastAppliedSwitch } from '@/lib/notify'
 import { useAgentStore, useNewsStore, usePmStore } from '@/stores'
 import { TRADE_ASSETS, type TradeAsset, type TradeVenue } from '../../../preload/okx-types'
 import type { UpdaterStatus } from '../../../preload/updater-types'
@@ -52,13 +53,13 @@ export function SettingsPage(): JSX.Element {
   const [maxVolume, setMaxVolume] = useState('0.1')
   const [riskPct, setRiskPct] = useState('1')
   const [fixedVolume, setFixedVolume] = useState('')
-  const [section, setSection] = useState<
-    'llm' | 'decision' | 'risk' | 'venue' | 'data' | 'about'
-  >(() => {
-    if (sessionStorage.getItem('settings-section') !== 'about') return 'llm'
-    sessionStorage.removeItem('settings-section')
-    return 'about'
-  })
+  const [section, setSection] = useState<'llm' | 'decision' | 'risk' | 'venue' | 'data' | 'about'>(
+    () => {
+      if (sessionStorage.getItem('settings-section') !== 'about') return 'llm'
+      sessionStorage.removeItem('settings-section')
+      return 'about'
+    }
+  )
   const [venue, setVenue] = useState<TradeVenue>('mt5')
   const [okxLeverage, setOkxLeverage] = useState('5')
   const [okxTdMode, setOkxTdMode] = useState<'cross' | 'isolated'>('cross')
@@ -159,6 +160,7 @@ export function SettingsPage(): JSX.Element {
   function switchAsset(next: TradeAsset): void {
     if (next === asset) return
     void saveConfig({ asset: next })
+    toastAppliedSwitch(next)
   }
 
   function switchOkxDemo(next: boolean): void {
@@ -169,6 +171,14 @@ export function SettingsPage(): JSX.Element {
     }
     clearOkxKeyInputs()
     void saveConfig({ okxDemo: true })
+    toastAppliedSwitch('模拟盘')
+  }
+
+  function switchVenue(next: TradeVenue): void {
+    setVenue(next)
+    if (next === (config?.venue ?? 'mt5')) return
+    void saveConfig({ venue: next })
+    toastAppliedSwitch(next === 'okx' ? 'OKX' : 'MT5')
   }
 
   function save(): void {
@@ -257,15 +267,8 @@ export function SettingsPage(): JSX.Element {
 
         {section === 'venue' && (
           <div className="grid max-w-xl gap-4">
-            <Field label="交易场所" hint="立刻生效，并会关闭自动交易总闸。">
-              <Select
-                value={venue}
-                onValueChange={(v) => {
-                  const next = v as TradeVenue
-                  setVenue(next)
-                  if (next !== (config?.venue ?? 'mt5')) void saveConfig({ venue: next })
-                }}
-              >
+            <Field label="交易场所" hint="立刻生效，并会关闭自动交易总闸。" applied>
+              <Select value={venue} onValueChange={(v) => switchVenue(v as TradeVenue)}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -282,6 +285,7 @@ export function SettingsPage(): JSX.Element {
                   ? 'OKX 合约由品种自动对应：BTC-USDT-SWAP / ETH-USDT-SWAP。立刻生效。'
                   : 'MT5 会按经纪商品名探测 BTCUSD / ETHUSD 一类报价。立刻生效。'
               }
+              applied
             >
               <Segmented
                 size="md"
@@ -296,6 +300,7 @@ export function SettingsPage(): JSX.Element {
                 <Field
                   label="盘口"
                   hint="模拟盘和实盘密钥分开保存。切换立刻生效，并会关闭自动交易总闸。"
+                  applied
                 >
                   <Segmented
                     size="md"
@@ -527,8 +532,10 @@ export function SettingsPage(): JSX.Element {
             </div>
 
             <div>
-              <h2 className="text-[13px] font-semibold">Polymarket watch</h2>
-              <p className="mt-1 text-[11px] text-muted-foreground">只读展示当前已加载的市场。</p>
+              <h2 className="text-[13px] font-semibold">宏观参考</h2>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Polymarket 事件概率，不是 BTC / ETH 价格盘。只读展示当前已加载的市场。
+              </p>
               <ul className="mt-3 divide-y divide-border rounded-lg border border-border">
                 {quotes.map((q) => (
                   <li key={q.id} className="px-3 py-2 text-[13px]">
@@ -537,7 +544,9 @@ export function SettingsPage(): JSX.Element {
                   </li>
                 ))}
                 {quotes.length === 0 && (
-                  <li className="px-3 py-4 text-[13px] text-muted-foreground">暂无市场</li>
+                  <li className="px-3 py-4 text-[13px] text-muted-foreground">
+                    暂无宏观盘口。这里不是现货行情。
+                  </li>
                 )}
               </ul>
               <div className="mt-2 flex gap-2">
@@ -572,9 +581,9 @@ export function SettingsPage(): JSX.Element {
 
         {error && <p className="mt-4 text-xs text-red-400">{error}</p>}
 
-        {section !== 'about' && (
+        {section !== 'about' && dirty && (
           <div className="pointer-events-none sticky bottom-0 mt-8 flex justify-end bg-gradient-to-t from-background via-background to-transparent pt-6">
-            <Button className="pointer-events-auto" disabled={!dirty || saving} onClick={save}>
+            <Button className="pointer-events-auto" disabled={saving} onClick={save}>
               {saving ? '保存中…' : '保存'}
             </Button>
           </div>
@@ -598,6 +607,7 @@ export function SettingsPage(): JSX.Element {
               onClick={() => {
                 clearOkxKeyInputs()
                 void saveConfig({ okxDemo: false })
+                toastAppliedSwitch('实盘')
               }}
             >
               确认切到实盘
@@ -688,15 +698,24 @@ function AboutSection({
 function Field({
   label,
   hint,
+  applied,
   children
 }: {
   label: string
   hint?: string
+  applied?: boolean
   children: ReactNode
 }): JSX.Element {
   return (
     <div className="grid gap-1.5">
-      <Label className="text-[13px]">{label}</Label>
+      <div className="flex items-center gap-2">
+        <Label className="text-[13px]">{label}</Label>
+        {applied && (
+          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+            已应用
+          </span>
+        )}
+      </div>
       {children}
       {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
     </div>

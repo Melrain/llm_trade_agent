@@ -3,12 +3,42 @@ import type { NewsImpact } from '../../../preload/news-types'
 import type { AgentAction } from '../../../preload/agent-types'
 import type { AccountMode } from '../../../preload/mt5-types'
 
+export function clampDigits(digits: number | null | undefined, fallback = 2): number {
+  if (digits == null || !Number.isFinite(digits)) return fallback
+  return Math.max(0, Math.min(8, Math.round(digits)))
+}
+
 export function formatNum(value: number | null | undefined, digits = 2): string {
   if (value == null || !Number.isFinite(value)) return '—'
   return value.toLocaleString('en-US', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits
   })
+}
+
+export function formatPrice(value: number | null | undefined, digits?: number | null): string {
+  return formatNum(value, clampDigits(digits))
+}
+
+/** 点差按合约精度显示；过小的数会加位，避免显示成 0.00 */
+export function formatSpread(value: number | null | undefined, digits?: number | null): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  const d = clampDigits(digits)
+  const abs = Math.abs(value)
+  if (abs === 0) return formatNum(0, d)
+  if (abs >= 1) return formatNum(value, d)
+  const auto = Math.min(8, Math.max(1, Math.ceil(-Math.log10(abs))))
+  return formatNum(value, Math.max(d, auto))
+}
+
+/** 过夜费 / 资金费率：小数很小时保留有效位 */
+export function formatFunding(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  const abs = Math.abs(value)
+  if (abs === 0) return '0'
+  if (abs < 0.0001) return formatNum(value, 6)
+  if (abs < 0.01) return formatNum(value, 4)
+  return formatNum(value, 2)
 }
 
 export function formatSigned(value: number | null | undefined, digits = 2): string {

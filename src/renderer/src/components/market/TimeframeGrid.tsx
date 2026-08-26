@@ -1,6 +1,13 @@
 import type { JSX } from 'react'
 
-import { formatNum, formatSignedPct, pnlTone, timeframeLabel, trendLabel } from '@/lib/format'
+import {
+  formatNum,
+  formatPrice,
+  formatSignedPct,
+  pnlTone,
+  timeframeLabel,
+  trendLabel
+} from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { MarketTimeframeId, MarketTimeframePack } from '../../../../preload/market-types'
 
@@ -9,11 +16,13 @@ const TFS: MarketTimeframeId[] = ['M15', 'H1', 'H4', 'D1']
 export function TimeframeGrid({
   packs,
   active,
-  onSelect
+  onSelect,
+  digits
 }: {
   packs: Record<MarketTimeframeId, MarketTimeframePack | null>
   active?: MarketTimeframeId
   onSelect?: (id: MarketTimeframeId) => void
+  digits?: number | null
 }): JSX.Element {
   return (
     <section className="rounded-lg border border-border bg-card p-4">
@@ -44,7 +53,7 @@ export function TimeframeGrid({
                   {trendLabel(pack?.trend)}
                 </span>
                 <span className="tabular-nums">{formatNum(pack?.rsi14, 1)}</span>
-                <span className="tabular-nums">{formatNum(pack?.atr14)}</span>
+                <span className="tabular-nums">{formatPrice(pack?.atr14, digits)}</span>
               </button>
             </li>
           )
@@ -53,8 +62,8 @@ export function TimeframeGrid({
       {active && packs[active] && (
         <p className="mt-1 text-[11px] text-muted-foreground">
           24h {formatSignedPct(packs[active]?.pctChange24h)} · EMA{' '}
-          {formatNum(packs[active]?.ema20, 1)} / {formatNum(packs[active]?.ema50, 1)} /{' '}
-          {formatNum(packs[active]?.ema200, 1)}
+          {formatPrice(packs[active]?.ema20, digits)} / {formatPrice(packs[active]?.ema50, digits)}{' '}
+          / {formatPrice(packs[active]?.ema200, digits)}
         </p>
       )}
     </section>

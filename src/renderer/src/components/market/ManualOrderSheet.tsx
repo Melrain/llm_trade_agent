@@ -11,7 +11,8 @@ import {
   SheetHeader,
   SheetTitle
 } from '@/components/ui/sheet'
-import { formatNum } from '@/lib/format'
+import { formatPrice } from '@/lib/format'
+import { volumeUnit } from '@/lib/venue-ui'
 import {
   fillingFromMode,
   ORDER_TYPE_BUY,
@@ -40,6 +41,9 @@ export function ManualOrderSheet({
   const specs = useMarketStore((s) => s.specs)
   const venue = useAgentStore((s) => s.config?.venue ?? 'mt5')
   const okx = useAgentStore((s) => s.config?.okx)
+  const digits = specs?.digits ?? 2
+  const unit = volumeUnit(venue)
+  const contractName = venue === 'okx' ? okx?.instId || symbol : symbol
   const [volume, setVolume] = useState('0.01')
   const [sl, setSl] = useState('')
   const [tp, setTp] = useState('')
@@ -70,7 +74,7 @@ export function ManualOrderSheet({
   async function preview(side: 'buy' | 'sell'): Promise<void> {
     const request = buildRequest(side)
     if (!request) {
-      setLog(venue === 'okx' ? '张数或价格无效' : '手数或价格无效')
+      setLog(`${unit}或价格无效`)
       return
     }
     setBusy(true)
@@ -84,7 +88,7 @@ export function ManualOrderSheet({
         }
         setPending({ side, request, comment: 'OKX 市价单预览' })
         setLog(
-          `预览：${side === 'buy' ? '买' : '卖'} ${volume} 张 @ ${formatNum(side === 'buy' ? price?.ask : price?.bid)} · 确认后发到 OKX`
+          `预览：${side === 'buy' ? '买' : '卖'} ${volume} ${unit} @ ${formatPrice(side === 'buy' ? price?.ask : price?.bid, digits)} · 确认后发到 OKX`
         )
         return
       }
@@ -96,7 +100,7 @@ export function ManualOrderSheet({
       }
       setPending({ side, request, comment: check.comment || '检查通过' })
       setLog(
-        `预览通过：${side === 'buy' ? '买' : '卖'} ${volume} 手 @ ${formatNum(Number(request.price))} · ${check.comment || '可发单'}`
+        `预览通过：${side === 'buy' ? '买' : '卖'} ${volume} ${unit} @ ${formatPrice(Number(request.price), digits)} · ${check.comment || '可发单'}`
       )
     } catch (error) {
       setLog(error instanceof Error ? error.message : String(error))
@@ -156,13 +160,18 @@ export function ManualOrderSheet({
         <SheetHeader>
           <SheetTitle>手动下单</SheetTitle>
           <SheetDescription>
-            逃生门。先预览再发单。买 {formatNum(price?.ask)} / 卖 {formatNum(price?.bid)}
+            逃生门 · {contractName} · 单位 {unit}。买 {formatPrice(price?.ask, digits)} / 卖{' '}
+            {formatPrice(price?.bid, digits)}
             {venue === 'okx' ? ' · 发到 OKX' : ' · 发到 MT5'}
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-3 px-4">
-          <Field label={venue === 'okx' ? '张数' : '手数'}>
-            <Input value={volume} onChange={(e) => setVolume(e.target.value)} />
+          <Field label={`${venue === 'okx' ? '张数' : '手数'}（默认 0.01 ${unit}）`}>
+            <Input
+              value={volume}
+              placeholder={`0.01 ${unit}`}
+              onChange={(e) => setVolume(e.target.value)}
+            />
           </Field>
           <Field label="止损（空=无）">
             <Input value={sl} onChange={(e) => setSl(e.target.value)} />

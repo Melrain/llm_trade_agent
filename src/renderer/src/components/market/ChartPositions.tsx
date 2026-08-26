@@ -23,7 +23,8 @@ import {
   SheetHeader,
   SheetTitle
 } from '@/components/ui/sheet'
-import { formatNum } from '@/lib/format'
+import { formatNum, formatPrice } from '@/lib/format'
+import { volumeUnit } from '@/lib/venue-ui'
 import { AGENT_MAGIC } from '../../../../preload/agent-types'
 import type { MarketPositionRow } from '../../../../preload/market-types'
 import {
@@ -44,6 +45,9 @@ function okxPosSide(type: MarketPositionRow['type']): 'long' | 'short' {
 
 export function ChartPositions(): JSX.Element {
   const positions = useMarketStore((s) => s.positions)
+  const digits = useMarketStore((s) => s.specs?.digits ?? 2)
+  const venue = useAgentStore((s) => s.config?.venue ?? 'mt5')
+  const unit = volumeUnit(venue)
   const [closeTarget, setCloseTarget] = useState<MarketPositionRow | null>(null)
   const [sltpTarget, setSltpTarget] = useState<MarketPositionRow | null>(null)
 
@@ -62,14 +66,17 @@ export function ChartPositions(): JSX.Element {
                 <span className={pos.type === 'buy' ? 'text-emerald-400' : 'text-red-400'}>
                   {pos.type === 'buy' ? '多' : '空'}
                 </span>
-                <span className="font-mono tabular-nums">{formatNum(pos.volume, 2)}</span>
+                <span className="font-mono tabular-nums">
+                  {formatNum(pos.volume, 2)} {unit}
+                </span>
                 <span className="ml-auto">
                   <PnlText value={pos.profit} />
                 </span>
               </div>
               <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                开 {formatNum(pos.priceOpen)} · SL {pos.sl ? formatNum(pos.sl) : '—'} · TP{' '}
-                {pos.tp ? formatNum(pos.tp) : '—'}
+                开 {formatPrice(pos.priceOpen, digits)} · SL{' '}
+                {pos.sl ? formatPrice(pos.sl, digits) : '—'} · TP{' '}
+                {pos.tp ? formatPrice(pos.tp, digits) : '—'}
               </p>
               <div className="mt-2 flex gap-1.5">
                 <Button

@@ -12,12 +12,14 @@ import {
   TableRow
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { formatNum, formatTime } from '@/lib/format'
+import { formatNum, formatPrice, formatTime } from '@/lib/format'
+import { volumeLabel } from '@/lib/venue-ui'
 import { useAgentStore } from '@/stores'
 
 export function ReviewPage(): JSX.Element {
   const stats = useAgentStore((s) => s.stats)
   const records = useAgentStore((s) => s.records)
+  const venue = useAgentStore((s) => s.config?.venue ?? 'mt5')
 
   const closed = useMemo(
     () =>
@@ -83,7 +85,7 @@ export function ReviewPage(): JSX.Element {
                   <TableRow>
                     <TableHead className="h-8">时间</TableHead>
                     <TableHead className="h-8">方向</TableHead>
-                    <TableHead className="h-8">手数</TableHead>
+                    <TableHead className="h-8">{volumeLabel(venue)}</TableHead>
                     <TableHead className="h-8">开仓</TableHead>
                     <TableHead className="h-8">平仓</TableHead>
                     <TableHead className="h-8">盈亏</TableHead>
@@ -106,9 +108,9 @@ export function ReviewPage(): JSX.Element {
                       <TableCell className="tabular-nums">
                         {formatNum(row.sizedVolume ?? row.decision?.volume)}
                       </TableCell>
-                      <TableCell className="tabular-nums">{formatNum(row.send?.price)}</TableCell>
+                      <TableCell className="tabular-nums">{formatPrice(row.send?.price)}</TableCell>
                       <TableCell className="tabular-nums">
-                        {formatNum(row.outcome?.closePrice)}
+                        {formatPrice(row.outcome?.closePrice)}
                       </TableCell>
                       <TableCell>
                         <PnlText value={row.outcome?.pnl} />

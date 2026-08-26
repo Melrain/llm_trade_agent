@@ -20,12 +20,15 @@ export function IntelPage(): JSX.Element {
     <div className="grid h-full min-h-0 grid-cols-3 gap-3 overflow-hidden p-3">
       <NewsFeed headlines={headlines} loading={newsLoading} onOpen={(url) => void openUrl(url)} />
       <section className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card p-4">
-        <h2 className="text-[13px] font-semibold">Polymarket</h2>
+        <h2 className="text-[13px] font-semibold">宏观参考</h2>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Polymarket 事件概率，不是 BTC / ETH 价格盘。
+        </p>
         <ScrollArea className="mt-3 min-h-0 flex-1">
           {pmLoading && quotes.length === 0 ? (
             <p className="text-[13px] text-muted-foreground">正在解析市场…</p>
           ) : quotes.length === 0 ? (
-            <EmptyState title="暂无报价" hint="检查 watch 配置或网络" />
+            <EmptyState title="暂无宏观盘口" hint="这里不是现货行情。检查 watch 配置或网络。" />
           ) : (
             <div className="space-y-3">
               {quotes.map((quote) => (
