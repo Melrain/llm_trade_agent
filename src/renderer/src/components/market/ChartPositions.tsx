@@ -38,6 +38,10 @@ import {
 } from '../../../../preload/mt5-types'
 import { useAgentStore, useMarketStore } from '@/stores'
 
+function okxPosSide(type: MarketPositionRow['type']): 'long' | 'short' {
+  return type === 'buy' ? 'long' : 'short'
+}
+
 export function ChartPositions(): JSX.Element {
   const positions = useMarketStore((s) => s.positions)
   const [closeTarget, setCloseTarget] = useState<MarketPositionRow | null>(null)
@@ -107,6 +111,7 @@ function ClosePositionDialog({
   const price = useMarketStore((s) => s.price)
   const specs = useMarketStore((s) => s.specs)
   const tradingEnabled = useAgentStore((s) => s.config?.tradingEnabled ?? false)
+  const venue = useAgentStore((s) => s.config?.venue ?? 'mt5')
   const [busy, setBusy] = useState(false)
   const [log, setLog] = useState<string | null>(null)
 
@@ -116,26 +121,40 @@ function ClosePositionDialog({
   }, [position?.ticket])
 
   async function confirm(): Promise<void> {
-    if (!position || !price) {
-      setLog('没有可用报价')
+    if (!position) {
+      setLog('没有持仓')
       return
     }
-    const buy = position.type === 'buy'
-    const request: Mt5TradeRequest = {
-      action: TRADE_ACTION_DEAL,
-      symbol,
-      volume: position.volume,
-      price: buy ? price.bid : price.ask,
-      deviation: 20,
-      type: buy ? ORDER_TYPE_SELL : ORDER_TYPE_BUY,
-      type_filling: fillingFromMode(specs?.fillingMode ?? undefined),
-      type_time: ORDER_TIME_GTC,
-      position: position.ticket,
-      comment: 'manual-close'
+    if (venue !== 'okx' && !price) {
+      setLog('没有可用报价')
+      return
     }
     setBusy(true)
     setLog(null)
     try {
+      if (venue === 'okx') {
+        const result = await window.api.okx.closePosition(symbol, okxPosSide(position.type))
+        if (result.code !== '0') {
+          setLog(`平仓失败 ${result.sCode ?? result.code} ${result.sMsg || result.msg}`)
+          return
+        }
+        toast.success(`已平仓 ${symbol}`, { description: result.ordId ?? 'close-position' })
+        onDone()
+        return
+      }
+      const buy = position.type === 'buy'
+      const request: Mt5TradeRequest = {
+        action: TRADE_ACTION_DEAL,
+        symbol,
+        volume: position.volume,
+        price: buy ? price.bid : price.ask,
+        deviation: 20,
+        type: buy ? ORDER_TYPE_SELL : ORDER_TYPE_BUY,
+        type_filling: fillingFromMode(specs?.fillingMode ?? undefined),
+        type_time: ORDER_TIME_GTC,
+        position: position.ticket,
+        comment: 'manual-close'
+      }
       const check = await window.api.mt5.order_check(request)
       const checkOk = check.retcode === 0 || isTradeSuccess(check.retcode)
       if (!checkOk) {
@@ -165,7 +184,7 @@ function ClosePositionDialog({
           <AlertDialogTitle>确认平仓 #{position?.ticket}</AlertDialogTitle>
           <AlertDialogDescription>
             {position
-              ? `${position.type === 'buy' ? '多' : '空'} ${formatNum(position.volume, 2)} 手，浮盈 ${formatNum(position.profit)}。这是手动逃生门，不会走 Agent 风控。`
+              ? `${position.type === 'buy' ? '多' : '空'} ${formatNum(position.volume, 2)} ${venue === 'okx' ? '张' : '手'}，浮盈 ${formatNum(position.profit)}。这是手动逃生门，不会走 Agent 风控。`
               : ''}
             {tradingEnabled && agentPos
               ? ' 自动交易总闸仍开着，下个周期 Agent 可能把仓再开回来。'
@@ -175,7 +194,11 @@ function ClosePositionDialog({
         {log && <p className="text-xs text-red-400">{log}</p>}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={busy}>取消</AlertDialogCancel>
-          <Button variant="destructive" disabled={busy || !price} onClick={() => void confirm()}>
+          <Button
+            variant="destructive"
+            disabled={busy || (venue !== 'okx' && !price)}
+            onClick={() => void confirm()}
+          >
             {busy ? '平仓中…' : '确认平仓'}
           </Button>
         </AlertDialogFooter>
@@ -193,6 +216,7 @@ function ModifySltpSheet({
 }): JSX.Element {
   const symbol = useMarketStore((s) => s.symbol)
   const specs = useMarketStore((s) => s.specs)
+  const venue = useAgentStore((s) => s.config?.venue ?? 'mt5')
   const [sl, setSl] = useState('')
   const [tp, setTp] = useState('')
   const [busy, setBusy] = useState(false)
@@ -226,6 +250,27 @@ function ModifySltpSheet({
   }
 
   async function preview(): Promise<void> {
+    if (venue === 'okx') {
+      if (!position) return
+      setBusy(true)
+      setLog(null)
+      setPending(null)
+      const nextSl = parsePrice(sl)
+      const nextTp = parsePrice(tp)
+      setLog(
+        `预览：SL ${nextSl ? formatNum(nextSl) : '清除'} / TP ${nextTp ? formatNum(nextTp) : '清除'} · 确认后改 OKX 条件单`
+      )
+      setPending({
+        action: TRADE_ACTION_SLTP,
+        symbol,
+        sl: nextSl,
+        tp: nextTp,
+        position: position.ticket,
+        comment: 'manual-sltp'
+      })
+      setBusy(false)
+      return
+    }
     const request = buildRequest()
     if (!request) return
     setBusy(true)
@@ -251,6 +296,23 @@ function ModifySltpSheet({
     if (!pending || !position) return
     setBusy(true)
     try {
+      if (venue === 'okx') {
+        const result = await window.api.okx.amendSlTp({
+          instId: symbol,
+          sl: pending.sl || undefined,
+          tp: pending.tp || undefined,
+          sz: String(position.volume),
+          side: position.type === 'buy' ? 'sell' : 'buy',
+          posSide: okxPosSide(position.type)
+        })
+        if (result.code !== '0') {
+          setLog(`修改失败 ${result.sCode ?? result.code} ${result.sMsg || result.msg}`)
+          return
+        }
+        toast.success(`已改 ${symbol} 止盈止损`)
+        onDone()
+        return
+      }
       const send = await window.api.mt5.order_send(pending)
       if (!isTradeSuccess(send.retcode)) {
         setLog(`修改失败 ${send.retcode} ${send.comment}`)

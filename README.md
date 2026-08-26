@@ -4,8 +4,8 @@
 
 支持两个交易场所，在 **设置 → 交易场所** 切换：
 
-- **MT5**：以 **XAUUSD** 为主，仅 Windows（官方 Python 接口限制）。
-- **OKX**：USDT 永续（默认 `BTC-USDT-SWAP`），Windows / macOS / Linux 都可跑行情；下单需要 OKX API Key。
+- **MT5**：**BTC / ETH** 现货报价（如 `BTCUSD` / `ETHUSD`），仅 Windows（官方 Python 接口限制）。
+- **OKX**：USDT 永续 `BTC-USDT-SWAP` / `ETH-USDT-SWAP`，Windows / macOS / Linux 都可跑行情；下单需要 OKX API Key。顶栏可立刻切换 **模拟盘 / 实盘**，两套密钥分开保存。
 
 实验性项目，建议先在 Demo / 模拟盘跑通，再开实盘。
 
@@ -15,7 +15,7 @@
 
 1. 一个 **OpenAI 兼容** 的 API Key（默认对接 [DeepSeek](https://platform.deepseek.com/)）。
 2. **MT5 模式**：Windows 电脑，已安装并登录 [MetaTrader 5](https://www.metatrader5.com/)。Demo 或实盘都可以。
-3. **OKX 模式**：OKX API Key / Secret / Passphrase。建议先开 [模拟盘](https://www.okx.com/) 并勾选设置里的「模拟盘」。密钥用系统加密存在本机。
+3. **OKX 模式**：OKX API Key / Secret / Passphrase。建议先开 [模拟盘](https://www.okx.com/)。模拟盘和实盘密钥分开保存，顶栏或设置里可随时切换。密钥用系统加密存在本机。
 
 ## 安装
 
@@ -84,8 +84,8 @@
 ### 6. 改用 OKX 自动交易
 
 1. **设置 → 交易场所** 选 **OKX · USDT 永续**。
-2. 选合约（`BTC-USDT-SWAP` / `ETH-USDT-SWAP` / `SOL-USDT-SWAP` / `XAU-USDT-SWAP`）、杠杆、全仓或逐仓。
-3. 勾选 **模拟盘**（推荐），填写 API Key / Secret / Passphrase，点 **测试连接**。
+2. 选品种 **BTC** 或 **ETH**（合约自动对应 `BTC-USDT-SWAP` / `ETH-USDT-SWAP`），再设杠杆、全仓或逐仓。
+3. 顶栏或设置里切到 **模拟盘**（推荐），填写该盘口的 API Key / Secret / Passphrase，点 **测试连接**。实盘密钥另存一套，切换时立刻生效。
 4. **设置 → 风控** 里的上限此时按 **合约张数** 计，不是 MT5 手数。
 5. 顶栏出现 DEMO / REAL 后，按上面第 4、5 步先手动决策再开总闸。
 
@@ -98,13 +98,13 @@
 | 页面 | 做什么 |
 | --- | --- |
 | **驾驶舱** | 净值、今日盈亏、持仓、最近一次决策、日亏水位、下次决策倒计时 |
-| **图表** | XAUUSD K 线（M15 / H1 / H4 / D1），可叠 EMA、RSI。成交会标在图上，点击标记可回看当时推理。右侧可手工下单 |
+| **图表** | BTC / ETH K 线（M15 / H1 / H4 / D1），可叠 EMA、RSI。成交会标在图上，点击标记可回看当时推理。右侧可手工下单 |
 | **Agent** | 决策时间线 + 单条详情（输入快照、推理、风控结论、成交回执） |
 | **情报** | 新闻、Polymarket 隐含概率、财经日历。高影响事件临近时顶栏会锁开仓 |
 | **复盘** | 胜率、盈亏比、累计盈亏曲线、已平仓列表 |
 | **设置** | LLM、决策周期、风控、只读数据源 |
 
-顶栏还能看到：品种现价、Agent 是否在跑、净值与浮动盈亏、账户是 DEMO / REAL。
+顶栏还能看到：品种现价、**BTC / ETH** 切换、OKX 的 **模拟盘 / 实盘** 切换、Agent 是否在跑、净值与浮动盈亏、账户是 DEMO / REAL。
 
 ## Agent 怎么工作
 
@@ -151,7 +151,7 @@
 不能。LLM 的价值在跨源信息整合，不在预测价格。请先在 Demo 上跑足够久。
 
 **支持哪些经纪商？**  
-任意提供 MT5 的经纪商。品种目前以 XAUUSD 为主。
+任意提供 MT5 的经纪商。品种目前是 **BTC / ETH**。
 
 **为什么只有 Windows？**  
 MT5 官方 Python 接口仅支持 Windows。

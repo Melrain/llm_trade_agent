@@ -139,12 +139,18 @@ export class OkxClient {
     }
   }
 
-  async getCandles(instIdRaw: string, bar: string, limit = CANDLE_LIMIT): Promise<OkxCandle[]> {
+  async getCandles(
+    instIdRaw: string,
+    bar: string,
+    limit = CANDLE_LIMIT,
+    after?: number
+  ): Promise<OkxCandle[]> {
     const instId = normalizeInstId(instIdRaw)
     const data = await this.publicGet<unknown[][]>('/api/v5/market/candles', {
       instId,
       bar,
-      limit: Math.min(Math.max(1, limit), CANDLE_LIMIT)
+      limit: Math.min(Math.max(1, limit), CANDLE_LIMIT),
+      ...(after != null && Number.isFinite(after) ? { after } : {})
     })
     const rows = Array.isArray(data) ? data : []
     const out: OkxCandle[] = []
@@ -465,6 +471,35 @@ export class OkxClient {
     }
     const res = await this.signedPostRaw('/api/v5/trade/order-algo', body)
     return asOrderResult(res)
+  }
+
+  async replaceAlgoSlTp(input: {
+    instId: string
+    tdMode: OkxTdMode
+    side: 'buy' | 'sell'
+    sz: string
+    sl?: number
+    tp?: number
+    posSide?: 'long' | 'short'
+  }): Promise<OkxOrderResult> {
+    const pending = await this.listPendingAlgos(input.instId)
+    const ids = pending
+      .map((row) => (typeof row.algoId === 'string' ? row.algoId : ''))
+      .filter(Boolean)
+    if (ids.length) await this.cancelAlgos(input.instId, ids)
+    if (input.sl == null && input.tp == null) {
+      return {
+        code: '0',
+        msg: '',
+        ordId: null,
+        clOrdId: null,
+        sCode: '0',
+        sMsg: 'cleared',
+        avgPx: null,
+        sz: null
+      }
+    }
+    return this.placeAlgoSlTp(input)
   }
 
   private buildAttachAlgo(sl?: number, tp?: number): Array<Record<string, string>> | undefined {

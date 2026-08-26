@@ -159,7 +159,8 @@ export function levelLabel(id: MarketLevelId | string): string {
 
 export function headlineImpact(tags: string[]): NewsImpact {
   if (tags.some((t) => t === 'nfp' || t === 'cpi' || t === 'fed' || t === 'geo')) return 'high'
-  if (tags.some((t) => t === 'gold' || t === 'usd')) return 'medium'
+  if (tags.some((t) => t === 'gold' || t === 'usd' || t === 'crypto' || t === 'btc' || t === 'eth'))
+    return 'medium'
   return 'low'
 }
 
@@ -169,6 +170,8 @@ export function tagLabel(tag: string): string {
   if (tag === 'nfp') return '非农'
   if (tag === 'gold') return '黄金'
   if (tag === 'crypto') return '加密'
+  if (tag === 'btc') return 'BTC'
+  if (tag === 'eth') return 'ETH'
   if (tag === 'geo') return '地缘'
   if (tag === 'usd') return '美元'
   return tag

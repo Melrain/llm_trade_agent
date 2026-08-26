@@ -4,7 +4,7 @@ import type { PmSnapshot } from '../../../preload/pm-types'
 import type { PolymarketCollector } from './collector'
 
 function assertSymbol(symbol: unknown): string {
-  if (symbol == null || symbol === '') return 'XAUUSD'
+  if (symbol == null || symbol === '') return 'BTCUSD'
   if (typeof symbol !== 'string' || !symbol.trim()) {
     throw new Error('symbol is required')
   }

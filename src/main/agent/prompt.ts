@@ -109,7 +109,7 @@ export function renderSnapshotMarkdown(snapshot: DecisionSnapshot): string {
   const lines: string[] = [
     snapshot.meta.venue === 'okx'
       ? `# OKX 永续快照 ${snapshot.meta.symbol}`
-      : `# 黄金快照 ${snapshot.meta.symbol}`,
+      : `# 加密快照 ${snapshot.meta.symbol}`,
     `生成 ${snapshot.meta.generatedAt}`,
     snapshot.meta.venue === 'okx'
       ? `K 线时间为 UTC（${snapshot.meta.barTime}）。日历为 UTC。`

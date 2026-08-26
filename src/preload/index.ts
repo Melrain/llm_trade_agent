@@ -6,7 +6,7 @@ import type { NewsApi, NewsSnapshot } from './news-types'
 import type { PmApi, PmSnapshot } from './pm-types'
 import type { AgentApi, AgentConfigPatch, AgentPublicConfig, AgentRecord } from './agent-types'
 import type { SnapshotApi, DecisionSnapshot } from './snapshot-types'
-import type { OkxApi, OkxPlaceOrderInput } from './okx-types'
+import type { OkxApi, OkxCandleBar, OkxPlaceOrderInput, OkxPosSide } from './okx-types'
 
 const api: {
   mt5: Mt5Api
@@ -20,7 +20,11 @@ const api: {
   okx: {
     test: () => ipcRenderer.invoke('okx:test'),
     placeOrder: (input: OkxPlaceOrderInput) => ipcRenderer.invoke('okx:placeOrder', input),
-    closePosition: (instId?: string) => ipcRenderer.invoke('okx:closePosition', instId)
+    closePosition: (instId?: string, posSide?: OkxPosSide) =>
+      ipcRenderer.invoke('okx:closePosition', instId, posSide),
+    candles: (instId: string, bar: OkxCandleBar, limit?: number, after?: number) =>
+      ipcRenderer.invoke('okx:candles', instId, bar, limit, after),
+    amendSlTp: (input) => ipcRenderer.invoke('okx:amendSlTp', input)
   },
   mt5: {
     version: () => ipcRenderer.invoke('mt5:version'),

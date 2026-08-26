@@ -20,7 +20,15 @@ import { emaSeries, rsiSeries } from '@/lib/indicators'
 import { cn } from '@/lib/utils'
 import { isTradeSuccess } from '../../../preload/mt5-types'
 import type { MarketTimeframeId } from '../../../preload/market-types'
+import type { OkxCandleBar } from '../../../preload/okx-types'
 import { useAgentStore, useMarketStore } from '@/stores'
+
+const OKX_BARS: Record<MarketTimeframeId, OkxCandleBar> = {
+  M15: '15m',
+  H1: '1H',
+  H4: '4H',
+  D1: '1Dutc'
+}
 
 export function ChartPage(): JSX.Element {
   const symbol = useMarketStore((s) => s.symbol)
@@ -31,6 +39,8 @@ export function ChartPage(): JSX.Element {
   const positions = useMarketStore((s) => s.positions)
   const digits = useMarketStore((s) => s.specs?.digits ?? 2)
   const records = useAgentStore((s) => s.records)
+  const venue = useAgentStore((s) => s.config?.venue ?? 'mt5')
+  const instId = useAgentStore((s) => s.config?.okx?.instId ?? symbol)
 
   const [tf, setTf] = useState<MarketTimeframeId>('H1')
   const [showEma, setShowEma] = useState({ ema20: true, ema50: true, ema200: true })
@@ -42,24 +52,47 @@ export function ChartPage(): JSX.Element {
   const [drawerId, setDrawerId] = useState<string | null>(null)
   const loadingMore = useRef(false)
   const exhausted = useRef(false)
+  const barsRef = useRef<ChartBar[]>([])
+  barsRef.current = bars
 
   const load = useCallback(
     async (start = 0, append = false) => {
       try {
-        const rates = await window.api.mt5.copy_rates_from_pos(symbol, tf, start, 300)
-        if (!Array.isArray(rates) || rates.length === 0) {
-          if (!append) setBars([])
-          exhausted.current = true
-          return
+        let next: ChartBar[] = []
+        if (venue === 'okx') {
+          const oldest = append ? barsRef.current[0]?.time : undefined
+          const after =
+            oldest != null ? (oldest > 10_000_000_000 ? oldest : oldest * 1000) : undefined
+          const candles = await window.api.okx.candles(instId, OKX_BARS[tf], 300, after)
+          if (!Array.isArray(candles) || candles.length === 0) {
+            if (!append) setBars([])
+            exhausted.current = true
+            return
+          }
+          exhausted.current = candles.length < 300
+          next = candles.map((c) => ({
+            time: Math.floor(c.ts / 1000),
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close
+          }))
+        } else {
+          const rates = await window.api.mt5.copy_rates_from_pos(symbol, tf, start, 300)
+          if (!Array.isArray(rates) || rates.length === 0) {
+            if (!append) setBars([])
+            exhausted.current = true
+            return
+          }
+          exhausted.current = rates.length < 300
+          next = rates.map((r) => ({
+            time: r.time,
+            open: r.open,
+            high: r.high,
+            low: r.low,
+            close: r.close
+          }))
         }
-        exhausted.current = rates.length < 300
-        const next: ChartBar[] = rates.map((r) => ({
-          time: r.time,
-          open: r.open,
-          high: r.high,
-          low: r.low,
-          close: r.close
-        }))
         setBars((prev) => {
           if (!append) return next
           const first = prev[0]?.time
@@ -71,7 +104,7 @@ export function ChartPage(): JSX.Element {
         setError(err instanceof Error ? err.message : String(err))
       }
     },
-    [symbol, tf]
+    [symbol, tf, venue, instId]
   )
 
   useEffect(() => {

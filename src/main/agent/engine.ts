@@ -912,12 +912,7 @@ export class AgentEngine {
       if (buy && pos.priceOpen >= bid) continue
       if (!buy && pos.priceOpen <= ask) continue
       try {
-        const pending = await this.okx.listPendingAlgos(snapshot.meta.symbol)
-        const ids = pending
-          .map((row) => (typeof row.algoId === 'string' ? row.algoId : ''))
-          .filter(Boolean)
-        if (ids.length) await this.okx.cancelAlgos(snapshot.meta.symbol, ids)
-        const send = await this.okx.placeAlgoSlTp({
+        const send = await this.okx.replaceAlgoSlTp({
           instId: snapshot.meta.symbol,
           tdMode: cfg.okx.tdMode,
           side: buy ? 'sell' : 'buy',

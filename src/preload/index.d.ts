@@ -68,12 +68,15 @@ export type {
 
 export type {
   OkxApi,
+  OkxCandleBar,
   OkxConnectionTest,
   OkxOrderResult,
   OkxPlaceOrderInput,
+  OkxPosSide,
   OkxPublicConfig,
   OkxTdMode,
   OkxTradeIntent,
+  TradeAsset,
   TradeVenue
 } from './okx-types'
 

@@ -78,17 +78,21 @@ export class PolymarketCollector {
     return () => this.listeners.delete(listener)
   }
 
-  getSnapshot(symbol = 'XAUUSD'): PmSnapshot {
-    const instrument = this.findInstrument(symbol)
+  getSnapshot(symbol?: string): PmSnapshot {
+    const key = symbol?.trim() ? symbol.toUpperCase() : ''
+    const instrument = key ? this.findInstrument(key) : undefined
+    const quotes = instrument
+      ? this.quotes.filter((q) => q.symbol === instrument.symbol)
+      : this.quotes
     return {
-      symbol: instrument?.symbol ?? symbol.toUpperCase(),
-      displayName: instrument?.displayName ?? symbol.toUpperCase(),
-      quotes: this.quotes.filter((q) => q.symbol === (instrument?.symbol ?? symbol.toUpperCase())),
+      symbol: instrument?.symbol ?? key ?? 'BTC',
+      displayName: instrument?.displayName ?? key ?? 'BTC',
+      quotes,
       health: this.health
     }
   }
 
-  async refresh(symbol = 'XAUUSD'): Promise<PmSnapshot> {
+  async refresh(symbol?: string): Promise<PmSnapshot> {
     try {
       this.config = loadWatchConfig()
       this.health.pollIntervalMs = this.config.pollIntervalMs
@@ -331,7 +335,7 @@ export class PolymarketCollector {
   }
 
   private emit(): void {
-    const snapshot = this.getSnapshot('XAUUSD')
+    const snapshot = this.getSnapshot()
     for (const listener of this.listeners) {
       listener(snapshot)
     }

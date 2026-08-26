@@ -16,12 +16,15 @@ const idleConfig: AgentPublicConfig = {
   riskPct: 0.01,
   fixedVolume: null,
   venue: 'mt5',
+  asset: 'BTC',
   okx: {
     instId: 'BTC-USDT-SWAP',
     demo: true,
     leverage: 5,
     tdMode: 'cross',
-    hasKeys: false
+    hasKeys: false,
+    hasDemoKeys: false,
+    hasLiveKeys: false
   }
 }
 

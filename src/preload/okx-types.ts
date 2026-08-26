@@ -1,4 +1,7 @@
 export type TradeVenue = 'mt5' | 'okx'
+export type TradeAsset = 'BTC' | 'ETH'
+
+export const TRADE_ASSETS = ['BTC', 'ETH'] as const
 
 export type OkxTdMode = 'cross' | 'isolated'
 export type OkxPosMode = 'net_mode' | 'long_short_mode'
@@ -9,12 +12,28 @@ export type OkxOrdType = 'market' | 'limit' | 'post_only' | 'fok' | 'ioc'
 export const DEFAULT_OKX_INST_ID = 'BTC-USDT-SWAP'
 export const DEFAULT_OKX_LEVERAGE = 5
 export const DEFAULT_OKX_TD_MODE: OkxTdMode = 'cross'
-export const OKX_INST_PRESETS = [
-  'BTC-USDT-SWAP',
-  'ETH-USDT-SWAP',
-  'SOL-USDT-SWAP',
-  'XAU-USDT-SWAP'
-] as const
+export const DEFAULT_TRADE_ASSET: TradeAsset = 'BTC'
+export const OKX_INST_PRESETS = ['BTC-USDT-SWAP', 'ETH-USDT-SWAP'] as const
+
+export function isTradeAsset(value: unknown): value is TradeAsset {
+  return value === 'BTC' || value === 'ETH'
+}
+
+export function okxInstIdForAsset(asset: TradeAsset): string {
+  return asset === 'ETH' ? 'ETH-USDT-SWAP' : 'BTC-USDT-SWAP'
+}
+
+export function assetFromInstId(instId: string): TradeAsset {
+  return instId.toUpperCase().includes('ETH') ? 'ETH' : 'BTC'
+}
+
+export function mt5SymbolForAsset(asset: TradeAsset): string {
+  return asset === 'ETH' ? 'ETHUSD' : 'BTCUSD'
+}
+
+export function venueSymbol(venue: TradeVenue, asset: TradeAsset): string {
+  return venue === 'okx' ? okxInstIdForAsset(asset) : mt5SymbolForAsset(asset)
+}
 
 export type OkxInstrumentSpec = {
   instId: string
@@ -152,10 +171,28 @@ export type OkxPublicConfig = {
   leverage: number
   tdMode: OkxTdMode
   hasKeys: boolean
+  hasDemoKeys: boolean
+  hasLiveKeys: boolean
 }
+
+export type OkxCandleBar = '15m' | '1H' | '4H' | '1Dutc'
 
 export type OkxApi = {
   test: () => Promise<OkxConnectionTest>
   placeOrder: (input: OkxPlaceOrderInput) => Promise<OkxOrderResult>
-  closePosition: (instId?: string) => Promise<OkxOrderResult>
+  closePosition: (instId?: string, posSide?: OkxPosSide) => Promise<OkxOrderResult>
+  candles: (
+    instId: string,
+    bar: OkxCandleBar,
+    limit?: number,
+    after?: number
+  ) => Promise<OkxCandle[]>
+  amendSlTp: (input: {
+    instId?: string
+    sl?: number
+    tp?: number
+    sz: string
+    side: OkxSide
+    posSide?: OkxPosSide
+  }) => Promise<OkxOrderResult>
 }

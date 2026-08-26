@@ -16,11 +16,13 @@ import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { HealthDot } from '@/components/common/HealthDot'
 import { PnlText } from '@/components/common/PnlText'
+import { Segmented } from '@/components/common/Segmented'
 import { formatCountdown, formatNum, formatSignedPct, isWeekend, pnlTone } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAgentStore, useAppStore, useMarketStore, useNewsStore } from '@/stores'
 import { HOLDING_INTERVAL_MS } from '../../../../preload/agent-types'
 import { accountModeFromTradeMode } from '../../../../preload/mt5-types'
+import { TRADE_ASSETS, type TradeAsset } from '../../../../preload/okx-types'
 
 function useNow(intervalMs = 1000): number {
   const [now, setNow] = useState(() => Date.now())
@@ -67,6 +69,8 @@ export function TopBar(): JSX.Element {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [needKeyOpen, setNeedKeyOpen] = useState(false)
   const [needAccountOpen, setNeedAccountOpen] = useState(false)
+  const [needOkxKeysOpen, setNeedOkxKeysOpen] = useState(false)
+  const [liveConfirmOpen, setLiveConfirmOpen] = useState(false)
   const [flash, setFlash] = useState<'up' | 'down' | null>(null)
   const prevMid = useRef<number | null>(null)
 
@@ -83,7 +87,9 @@ export function TopBar(): JSX.Element {
     enabled && lastDecision ? Date.parse(lastDecision.createdAt) + effectiveMs - now : 0
   const haltWindow = calendar.some((ev) => ev.impact === 'high' && ev.soon)
   const venue = config?.venue ?? 'mt5'
-  const feed = venueStatus(ready, lastError, priceChangedAt, now, venue === 'okx')
+  const asset = config?.asset === 'ETH' ? 'ETH' : 'BTC'
+  const okxDemo = config?.okx?.demo !== false
+  const feed = venueStatus(ready, lastError, priceChangedAt, now, true)
   const equity = account?.equity ?? null
   const profit = account?.profit ?? null
 
@@ -147,6 +153,39 @@ export function TopBar(): JSX.Element {
           {formatSignedPct(change24h)}
         </span>
       </button>
+
+      <div className="h-6 w-px bg-border" />
+
+      <Segmented
+        value={asset}
+        disabled={saving || !config}
+        options={TRADE_ASSETS.map((id) => ({ value: id, label: id }))}
+        onChange={(next: TradeAsset) => {
+          if (next !== asset) void saveConfig({ asset: next })
+        }}
+      />
+
+      {venue === 'okx' && (
+        <Segmented
+          value={okxDemo ? 'demo' : 'live'}
+          disabled={saving || !config}
+          options={[
+            { value: 'demo', label: '模拟盘' },
+            { value: 'live', label: '实盘', danger: true }
+          ]}
+          onChange={(next) => {
+            if (next === 'demo') {
+              void saveConfig({ okxDemo: true })
+              return
+            }
+            if (!config?.okx?.hasLiveKeys) {
+              setNeedOkxKeysOpen(true)
+              return
+            }
+            setLiveConfirmOpen(true)
+          }}
+        />
+      )}
 
       <div className="h-6 w-px bg-border" />
 
@@ -226,13 +265,55 @@ export function TopBar(): JSX.Element {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={needOkxKeysOpen} onOpenChange={setNeedOkxKeysOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>尚未配置实盘密钥</AlertDialogTitle>
+            <AlertDialogDescription>
+              实盘和模拟盘的 API Key 是分开保存的。请先到设置里填写实盘 Key / Secret / Passphrase。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setNeedOkxKeysOpen(false)
+                setActivePage('settings')
+              }}
+            >
+              去配置
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={liveConfirmOpen} onOpenChange={setLiveConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>切换到 OKX 实盘？</AlertDialogTitle>
+            <AlertDialogDescription>
+              行情、持仓和下单都会切到真实资金账户。自动交易总闸会关闭，需要重新确认后再打开。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 text-white hover:bg-red-400"
+              onClick={() => void saveConfig({ okxDemo: false })}
+            >
+              确认切到实盘
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={needAccountOpen} onOpenChange={setNeedAccountOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>尚未识别账户类型</AlertDialogTitle>
             <AlertDialogDescription>
               {venue === 'okx'
-                ? '请先在设置里填写 OKX API Key / Secret / Passphrase，并点「测试连接」。等顶栏出现 DEMO 或 REAL 后再打开自动交易。'
+                ? `请先在设置里填写当前${okxDemo ? '模拟盘' : '实盘'}的 OKX API Key / Secret / Passphrase，并点「测试连接」。等顶栏出现 DEMO 或 REAL 后再打开自动交易。`
                 : '请先打开并登录 MetaTrader 5，等顶栏出现 DEMO 或 REAL 后再打开自动交易。账户切换后总闸也会自动关闭，需要重新确认。'}
             </AlertDialogDescription>
           </AlertDialogHeader>

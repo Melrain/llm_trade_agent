@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState, type JSX, type ReactNode } from 'react'
 
+import { Segmented } from '@/components/common/Segmented'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,7 +23,7 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useAgentStore, useNewsStore, usePmStore } from '@/stores'
-import { OKX_INST_PRESETS, type TradeVenue } from '../../../preload/okx-types'
+import { TRADE_ASSETS, type TradeAsset, type TradeVenue } from '../../../preload/okx-types'
 
 const INTERVALS = [
   { value: String(15 * 60 * 1000), label: '15 分钟' },
@@ -42,8 +53,6 @@ export function SettingsPage(): JSX.Element {
   const [fixedVolume, setFixedVolume] = useState('')
   const [section, setSection] = useState<'llm' | 'decision' | 'risk' | 'venue' | 'data'>('llm')
   const [venue, setVenue] = useState<TradeVenue>('mt5')
-  const [okxInstId, setOkxInstId] = useState('BTC-USDT-SWAP')
-  const [okxDemo, setOkxDemo] = useState(true)
   const [okxLeverage, setOkxLeverage] = useState('5')
   const [okxTdMode, setOkxTdMode] = useState<'cross' | 'isolated'>('cross')
   const [okxApiKey, setOkxApiKey] = useState('')
@@ -51,6 +60,7 @@ export function SettingsPage(): JSX.Element {
   const [okxPassphrase, setOkxPassphrase] = useState('')
   const [okxTest, setOkxTest] = useState<string | null>(null)
   const [okxTesting, setOkxTesting] = useState(false)
+  const [liveConfirm, setLiveConfirm] = useState(false)
 
   useEffect(() => {
     void loadFeeds()
@@ -68,12 +78,16 @@ export function SettingsPage(): JSX.Element {
     setRiskPct(String(Math.round(config.riskPct * 1000) / 10))
     setFixedVolume(config.fixedVolume == null ? '' : String(config.fixedVolume))
     setVenue(config.venue ?? 'mt5')
-    setOkxInstId(config.okx?.instId ?? 'BTC-USDT-SWAP')
-    setOkxDemo(config.okx?.demo !== false)
     setOkxLeverage(String(config.okx?.leverage ?? 5))
     setOkxTdMode(config.okx?.tdMode === 'isolated' ? 'isolated' : 'cross')
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [config])
+
+  const asset = config?.asset === 'ETH' ? 'ETH' : 'BTC'
+  const okxDemo = config?.okx?.demo !== false
+  const hasDemoKeys = Boolean(config?.okx?.hasDemoKeys)
+  const hasLiveKeys = Boolean(config?.okx?.hasLiveKeys)
+  const currentSlotSaved = okxDemo ? hasDemoKeys : hasLiveKeys
 
   const dirty = useMemo(() => {
     if (!config) return false
@@ -89,8 +103,6 @@ export function SettingsPage(): JSX.Element {
       Number(riskPct) / 100 !== config.riskPct ||
       (fixed ?? null) !== (config.fixedVolume ?? null) ||
       venue !== (config.venue ?? 'mt5') ||
-      okxInstId !== (config.okx?.instId ?? 'BTC-USDT-SWAP') ||
-      okxDemo !== (config.okx?.demo !== false) ||
       Number(okxLeverage) !== (config.okx?.leverage ?? 5) ||
       okxTdMode !== (config.okx?.tdMode ?? 'cross') ||
       okxApiKey.trim() !== '' ||
@@ -109,14 +121,34 @@ export function SettingsPage(): JSX.Element {
     riskPct,
     fixedVolume,
     venue,
-    okxInstId,
-    okxDemo,
     okxLeverage,
     okxTdMode,
     okxApiKey,
     okxSecret,
     okxPassphrase
   ])
+
+  function clearOkxKeyInputs(): void {
+    setOkxApiKey('')
+    setOkxSecret('')
+    setOkxPassphrase('')
+    setOkxTest(null)
+  }
+
+  function switchAsset(next: TradeAsset): void {
+    if (next === asset) return
+    void saveConfig({ asset: next })
+  }
+
+  function switchOkxDemo(next: boolean): void {
+    if (next === okxDemo) return
+    if (!next) {
+      setLiveConfirm(true)
+      return
+    }
+    clearOkxKeyInputs()
+    void saveConfig({ okxDemo: true })
+  }
 
   function save(): void {
     const max = Number(maxVolume)
@@ -131,8 +163,6 @@ export function SettingsPage(): JSX.Element {
       intervalMs: Number.isFinite(interval) ? interval : undefined,
       enabled,
       venue,
-      okxInstId,
-      okxDemo,
       okxTdMode,
       ...(Number.isFinite(Number(okxLeverage)) ? { okxLeverage: Number(okxLeverage) } : {}),
       ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
@@ -144,9 +174,7 @@ export function SettingsPage(): JSX.Element {
       fixedVolume: fixed != null && Number.isFinite(fixed) ? fixed : null
     }).then(() => {
       setApiKey('')
-      setOkxApiKey('')
-      setOkxSecret('')
-      setOkxPassphrase('')
+      clearOkxKeyInputs()
     })
   }
 
@@ -214,36 +242,48 @@ export function SettingsPage(): JSX.Element {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="mt5">MT5 · XAUUSD</SelectItem>
+                  <SelectItem value="mt5">MT5 · BTC / ETH</SelectItem>
                   <SelectItem value="okx">OKX · USDT 永续</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
+            <Field
+              label="交易品种"
+              hint={
+                venue === 'okx'
+                  ? 'OKX 合约由品种自动对应：BTC-USDT-SWAP / ETH-USDT-SWAP。立刻生效。'
+                  : 'MT5 会按经纪商品名探测 BTCUSD / ETHUSD 一类报价。立刻生效。'
+              }
+            >
+              <Segmented
+                size="md"
+                value={asset}
+                disabled={saving}
+                options={TRADE_ASSETS.map((id) => ({ value: id, label: id }))}
+                onChange={switchAsset}
+              />
+            </Field>
             {venue === 'okx' && (
               <>
-                <Field label="合约">
-                  <Select value={okxInstId} onValueChange={setOkxInstId}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {OKX_INST_PRESETS.map((id) => (
-                        <SelectItem key={id} value={id}>
-                          {id}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <Field
+                  label="盘口"
+                  hint="模拟盘和实盘密钥分开保存。切换立刻生效，并会关闭自动交易总闸。"
+                >
+                  <Segmented
+                    size="md"
+                    value={okxDemo ? 'demo' : 'live'}
+                    disabled={saving}
+                    options={[
+                      { value: 'demo', label: '模拟盘' },
+                      { value: 'live', label: '实盘', danger: true }
+                    ]}
+                    onChange={(v) => switchOkxDemo(v === 'demo')}
+                  />
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    模拟盘密钥 {hasDemoKeys ? '已保存' : '未配置'} · 实盘密钥{' '}
+                    {hasLiveKeys ? '已保存' : '未配置'}
+                  </p>
                 </Field>
-                <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
-                  <div>
-                    <p className="text-[13px]">模拟盘</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      打开后走 OKX 模拟交易（x-simulated-trading）。需要单独的模拟盘 API Key。
-                    </p>
-                  </div>
-                  <Switch checked={okxDemo} onCheckedChange={setOkxDemo} />
-                </div>
                 <Field label="杠杆" hint="下单前会按此杠杆设置。建议先用 3–10x。">
                   <Input
                     type="number"
@@ -269,33 +309,33 @@ export function SettingsPage(): JSX.Element {
                   </Select>
                 </Field>
                 <Field
-                  label="OKX API Key"
+                  label={okxDemo ? '模拟盘 API Key' : '实盘 API Key'}
                   hint={
-                    config?.okx?.hasKeys
-                      ? '已保存，留空不改'
-                      : 'API Key / Secret / Passphrase 都要填'
+                    currentSlotSaved
+                      ? `当前${okxDemo ? '模拟盘' : '实盘'}密钥已保存，留空不改`
+                      : `请填写当前${okxDemo ? '模拟盘' : '实盘'}的 API Key / Secret / Passphrase`
                   }
                 >
                   <Input
                     type="password"
                     value={okxApiKey}
-                    placeholder={config?.okx?.hasKeys ? '已保存' : 'API Key'}
+                    placeholder={currentSlotSaved ? '已保存' : 'API Key'}
                     onChange={(e) => setOkxApiKey(e.target.value)}
                   />
                 </Field>
-                <Field label="OKX Secret">
+                <Field label={okxDemo ? '模拟盘 Secret' : '实盘 Secret'}>
                   <Input
                     type="password"
                     value={okxSecret}
-                    placeholder={config?.okx?.hasKeys ? '已保存' : 'Secret'}
+                    placeholder={currentSlotSaved ? '已保存' : 'Secret'}
                     onChange={(e) => setOkxSecret(e.target.value)}
                   />
                 </Field>
-                <Field label="OKX Passphrase">
+                <Field label={okxDemo ? '模拟盘 Passphrase' : '实盘 Passphrase'}>
                   <Input
                     type="password"
                     value={okxPassphrase}
-                    placeholder={config?.okx?.hasKeys ? '已保存' : 'Passphrase'}
+                    placeholder={currentSlotSaved ? '已保存' : 'Passphrase'}
                     onChange={(e) => setOkxPassphrase(e.target.value)}
                   />
                 </Field>
@@ -317,13 +357,13 @@ export function SettingsPage(): JSX.Element {
                               : `连接失败：${res.error}`
                           )
                         })
-                        .catch((error) => {
-                          setOkxTest(error instanceof Error ? error.message : String(error))
+                        .catch((err) => {
+                          setOkxTest(err instanceof Error ? err.message : String(err))
                         })
                         .finally(() => setOkxTesting(false))
                     }}
                   >
-                    {okxTesting ? '测试中…' : '测试连接'}
+                    {okxTesting ? '测试中…' : '测试当前盘口连接'}
                   </Button>
                   {okxTest && <p className="text-[11px] text-muted-foreground">{okxTest}</p>}
                 </div>
@@ -489,6 +529,31 @@ export function SettingsPage(): JSX.Element {
           </Button>
         </div>
       </div>
+
+      <AlertDialog open={liveConfirm} onOpenChange={setLiveConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>切换到 OKX 实盘？</AlertDialogTitle>
+            <AlertDialogDescription>
+              之后下单和自动交易都会打到真实资金账户。模拟盘和实盘密钥是分开的
+              {hasLiveKeys ? '；当前实盘密钥已保存。' : '；当前还没有实盘密钥，切换后请先填写。'}
+              切换会关闭自动交易总闸。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 text-white hover:bg-red-400"
+              onClick={() => {
+                clearOkxKeyInputs()
+                void saveConfig({ okxDemo: false })
+              }}
+            >
+              确认切到实盘
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

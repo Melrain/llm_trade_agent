@@ -21,12 +21,13 @@ import {
   trendFromEmas
 } from '../../indicators'
 import { AGENT_MAGIC } from '../../../preload/agent-types'
-import { getPublicConfig, getVenue } from '../../agent/config'
+import { getAsset, getPublicConfig, getVenue } from '../../agent/config'
 import type { Mt5Client } from '../../mt5/client'
 import type { OkxClient } from '../../okx/client'
 import { posIdToTicket } from '../../okx/normalize'
 import { okxPositionType } from '../../okx/order-builder'
-import { fetchGoldSpotFromMt5 } from '../polymarket/spot-mt5'
+import { okxInstIdForAsset, venueSymbol, type TradeAsset } from '../../../preload/okx-types'
+import { fetchCryptoSpotFromMt5 } from './spot-mt5'
 
 const OKX_BARS: Record<MarketTimeframeId, string> = {
   M15: '15m',
@@ -52,7 +53,10 @@ function emptyTimeframes(): MarketSnapshot['timeframes'] {
   return { M15: null, H1: null, H4: null, D1: null }
 }
 
-function emptySnapshot(symbol = 'XAUUSD', venue: 'mt5' | 'okx' = 'mt5'): MarketSnapshot {
+function emptySnapshot(
+  symbol = venueSymbol('mt5', 'BTC'),
+  venue: 'mt5' | 'okx' = 'mt5'
+): MarketSnapshot {
   return {
     venue,
     symbol,
@@ -143,7 +147,7 @@ export class MarketCollector {
   private timer: NodeJS.Timeout | null = null
   private tail: Promise<void> = Promise.resolve()
   private started = false
-  private goldSymbol: string | null = null
+  private cachedSpot: { asset: TradeAsset; symbol: string } | null = null
   private lastPriceKey: string | null = null
   private lastPriceChangeAt: number | null = null
 
@@ -226,7 +230,7 @@ export class MarketCollector {
         lastError: 'OKX 客户端未初始化'
       }
     }
-    const instId = getPublicConfig().okx.instId
+    const instId = getPublicConfig().okx.instId || okxInstIdForAsset(getAsset())
     const [ticker, spec, funding, ...candleRows] = await Promise.all([
       this.okx.getTicker(instId),
       this.okx.getInstrumentSpec(instId),
@@ -377,8 +381,10 @@ export class MarketCollector {
   }
 
   private async buildMt5Snapshot(): Promise<MarketSnapshot> {
-    const tick = await fetchGoldSpotFromMt5(this.mt5, this.goldSymbol)
-    this.goldSymbol = tick.symbol
+    const asset = getAsset()
+    const cached = this.cachedSpot?.asset === asset ? this.cachedSpot.symbol : null
+    const tick = await fetchCryptoSpotFromMt5(this.mt5, asset, cached)
+    this.cachedSpot = { asset, symbol: tick.symbol }
 
     const [infoRaw, accountRaw, positionsRaw, ...rateRows] = await Promise.all([
       this.mt5.request('symbol_info', { symbol: tick.symbol }).catch(() => null),

@@ -6,7 +6,12 @@ import {
   DEFAULT_OKX_INST_ID,
   DEFAULT_OKX_LEVERAGE,
   DEFAULT_OKX_TD_MODE,
+  DEFAULT_TRADE_ASSET,
+  assetFromInstId,
+  isTradeAsset,
+  okxInstIdForAsset,
   type OkxTdMode,
+  type TradeAsset,
   type TradeVenue
 } from '../../preload/okx-types'
 import { getKvJson, setKv } from '../db/kv'
@@ -41,13 +46,17 @@ type StoredConfig = {
   armedLogin: number | null
   armedMode: 'demo' | 'real' | null
   venue: TradeVenue
+  asset: TradeAsset
   okxInstId: string
   okxDemo: boolean
   okxLeverage: number
   okxTdMode: OkxTdMode
-  okxApiKeyEnc: string | null
-  okxSecretEnc: string | null
-  okxPassphraseEnc: string | null
+  okxDemoApiKeyEnc: string | null
+  okxDemoSecretEnc: string | null
+  okxDemoPassphraseEnc: string | null
+  okxLiveApiKeyEnc: string | null
+  okxLiveSecretEnc: string | null
+  okxLivePassphraseEnc: string | null
   okxBaseUrl: string
 }
 
@@ -77,6 +86,58 @@ function clampFixedVolume(
   return clampMaxVolume(Math.min(value, maxVolume), venue)
 }
 
+function resolveAsset(parsed: Partial<StoredConfig> & { okxInstId?: string }): TradeAsset {
+  if (isTradeAsset(parsed.asset)) return parsed.asset
+  if (typeof parsed.okxInstId === 'string' && parsed.okxInstId.trim()) {
+    return assetFromInstId(normalizeInstId(parsed.okxInstId))
+  }
+  return DEFAULT_TRADE_ASSET
+}
+
+function slotHasKeys(key: string | null, secret: string | null, pass: string | null): boolean {
+  return Boolean(key && secret && pass)
+}
+
+function migrateOkxKeys(parsed: Record<string, unknown>): Pick<
+  StoredConfig,
+  | 'okxDemoApiKeyEnc'
+  | 'okxDemoSecretEnc'
+  | 'okxDemoPassphraseEnc'
+  | 'okxLiveApiKeyEnc'
+  | 'okxLiveSecretEnc'
+  | 'okxLivePassphraseEnc'
+> {
+  const asEnc = (value: unknown): string | null => (typeof value === 'string' ? value : null)
+  let demoKey = asEnc(parsed.okxDemoApiKeyEnc)
+  let demoSecret = asEnc(parsed.okxDemoSecretEnc)
+  let demoPass = asEnc(parsed.okxDemoPassphraseEnc)
+  let liveKey = asEnc(parsed.okxLiveApiKeyEnc)
+  let liveSecret = asEnc(parsed.okxLiveSecretEnc)
+  let livePass = asEnc(parsed.okxLivePassphraseEnc)
+  const legacyKey = asEnc(parsed.okxApiKeyEnc)
+  const legacySecret = asEnc(parsed.okxSecretEnc)
+  const legacyPass = asEnc(parsed.okxPassphraseEnc)
+  if (legacyKey && legacySecret && legacyPass) {
+    if (parsed.okxDemo === false) {
+      liveKey = liveKey ?? legacyKey
+      liveSecret = liveSecret ?? legacySecret
+      livePass = livePass ?? legacyPass
+    } else {
+      demoKey = demoKey ?? legacyKey
+      demoSecret = demoSecret ?? legacySecret
+      demoPass = demoPass ?? legacyPass
+    }
+  }
+  return {
+    okxDemoApiKeyEnc: demoKey,
+    okxDemoSecretEnc: demoSecret,
+    okxDemoPassphraseEnc: demoPass,
+    okxLiveApiKeyEnc: liveKey,
+    okxLiveSecretEnc: liveSecret,
+    okxLivePassphraseEnc: livePass
+  }
+}
+
 function clampLeverage(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_OKX_LEVERAGE
   return Math.min(125, Math.max(1, Math.round(value)))
@@ -97,13 +158,17 @@ function defaults(): StoredConfig {
     armedLogin: null,
     armedMode: null,
     venue: 'mt5',
+    asset: DEFAULT_TRADE_ASSET,
     okxInstId: DEFAULT_OKX_INST_ID,
     okxDemo: true,
     okxLeverage: DEFAULT_OKX_LEVERAGE,
     okxTdMode: DEFAULT_OKX_TD_MODE,
-    okxApiKeyEnc: null,
-    okxSecretEnc: null,
-    okxPassphraseEnc: null,
+    okxDemoApiKeyEnc: null,
+    okxDemoSecretEnc: null,
+    okxDemoPassphraseEnc: null,
+    okxLiveApiKeyEnc: null,
+    okxLiveSecretEnc: null,
+    okxLivePassphraseEnc: null,
     okxBaseUrl: DEFAULT_OKX_BASE_URL
   }
 }
@@ -144,17 +209,13 @@ function normalizeStored(parsed: Partial<StoredConfig>): StoredConfig {
     armedLogin: typeof parsed.armedLogin === 'number' ? parsed.armedLogin : null,
     armedMode: parsed.armedMode === 'demo' || parsed.armedMode === 'real' ? parsed.armedMode : null,
     venue,
-    okxInstId:
-      typeof parsed.okxInstId === 'string' && parsed.okxInstId.trim()
-        ? normalizeInstId(parsed.okxInstId)
-        : base.okxInstId,
+    asset: resolveAsset(parsed),
+    okxInstId: okxInstIdForAsset(resolveAsset(parsed)),
     okxDemo: parsed.okxDemo !== false,
     okxLeverage:
       typeof parsed.okxLeverage === 'number' ? clampLeverage(parsed.okxLeverage) : base.okxLeverage,
     okxTdMode: parsed.okxTdMode === 'isolated' ? 'isolated' : 'cross',
-    okxApiKeyEnc: typeof parsed.okxApiKeyEnc === 'string' ? parsed.okxApiKeyEnc : null,
-    okxSecretEnc: typeof parsed.okxSecretEnc === 'string' ? parsed.okxSecretEnc : null,
-    okxPassphraseEnc: typeof parsed.okxPassphraseEnc === 'string' ? parsed.okxPassphraseEnc : null,
+    ...migrateOkxKeys(parsed),
     okxBaseUrl:
       typeof parsed.okxBaseUrl === 'string' && parsed.okxBaseUrl.trim()
         ? parsed.okxBaseUrl.trim().replace(/\/+$/, '')
@@ -215,18 +276,27 @@ export function getPublicConfig(accountMode: AccountMode = 'unknown'): AgentPubl
     riskPct: cfg.riskPct,
     fixedVolume: cfg.fixedVolume,
     venue: cfg.venue,
+    asset: cfg.asset,
     okx: {
       instId: cfg.okxInstId,
       demo: cfg.okxDemo,
       leverage: cfg.okxLeverage,
       tdMode: cfg.okxTdMode,
-      hasKeys: Boolean(cfg.okxApiKeyEnc && cfg.okxSecretEnc && cfg.okxPassphraseEnc)
+      hasKeys: cfg.okxDemo
+        ? slotHasKeys(cfg.okxDemoApiKeyEnc, cfg.okxDemoSecretEnc, cfg.okxDemoPassphraseEnc)
+        : slotHasKeys(cfg.okxLiveApiKeyEnc, cfg.okxLiveSecretEnc, cfg.okxLivePassphraseEnc),
+      hasDemoKeys: slotHasKeys(cfg.okxDemoApiKeyEnc, cfg.okxDemoSecretEnc, cfg.okxDemoPassphraseEnc),
+      hasLiveKeys: slotHasKeys(cfg.okxLiveApiKeyEnc, cfg.okxLiveSecretEnc, cfg.okxLivePassphraseEnc)
     }
   }
 }
 
 export function getVenue(): TradeVenue {
   return readStored().venue
+}
+
+export function getAsset(): TradeAsset {
+  return readStored().asset
 }
 
 export function getApiKey(): string | null {
@@ -244,10 +314,13 @@ export function getOkxCredentials(): {
   baseUrl: string
 } | null {
   const cfg = readStored()
-  if (!cfg.okxApiKeyEnc || !cfg.okxSecretEnc || !cfg.okxPassphraseEnc) return null
-  const apiKey = decryptKey(cfg.okxApiKeyEnc)?.trim()
-  const secret = decryptKey(cfg.okxSecretEnc)?.trim()
-  const passphrase = decryptKey(cfg.okxPassphraseEnc)?.trim()
+  const apiKeyEnc = cfg.okxDemo ? cfg.okxDemoApiKeyEnc : cfg.okxLiveApiKeyEnc
+  const secretEnc = cfg.okxDemo ? cfg.okxDemoSecretEnc : cfg.okxLiveSecretEnc
+  const passEnc = cfg.okxDemo ? cfg.okxDemoPassphraseEnc : cfg.okxLivePassphraseEnc
+  if (!apiKeyEnc || !secretEnc || !passEnc) return null
+  const apiKey = decryptKey(apiKeyEnc)?.trim()
+  const secret = decryptKey(secretEnc)?.trim()
+  const passphrase = decryptKey(passEnc)?.trim()
   if (!apiKey || !secret || !passphrase) return null
   return {
     apiKey,
@@ -335,13 +408,18 @@ export function setConfig(
     const key = patch.apiKey.trim()
     cfg.apiKeyEnc = key ? encryptKey(key) : null
   }
-  if (typeof patch.okxInstId === 'string' && patch.okxInstId.trim()) {
+  if (isTradeAsset(patch.asset)) {
+    if (patch.asset !== cfg.asset) disarm(cfg)
+    cfg.asset = patch.asset
+    cfg.okxInstId = okxInstIdForAsset(patch.asset)
+  } else if (typeof patch.okxInstId === 'string' && patch.okxInstId.trim()) {
     const next = normalizeInstId(patch.okxInstId)
-    if (next !== cfg.okxInstId && cfg.venue === 'okx') disarm(cfg)
+    if (next !== cfg.okxInstId) disarm(cfg)
     cfg.okxInstId = next
+    cfg.asset = assetFromInstId(next)
   }
   if (typeof patch.okxDemo === 'boolean') {
-    if (patch.okxDemo !== cfg.okxDemo && cfg.venue === 'okx') disarm(cfg)
+    if (patch.okxDemo !== cfg.okxDemo) disarm(cfg)
     cfg.okxDemo = patch.okxDemo
   }
   if (typeof patch.okxLeverage === 'number') {
@@ -350,17 +428,20 @@ export function setConfig(
   if (patch.okxTdMode === 'cross' || patch.okxTdMode === 'isolated') {
     cfg.okxTdMode = patch.okxTdMode
   }
-  if (typeof patch.okxApiKey === 'string') {
-    const key = patch.okxApiKey.trim()
-    cfg.okxApiKeyEnc = key ? encryptKey(key) : cfg.okxApiKeyEnc
+  if (typeof patch.okxApiKey === 'string' && patch.okxApiKey.trim()) {
+    const enc = encryptKey(patch.okxApiKey.trim())
+    if (cfg.okxDemo) cfg.okxDemoApiKeyEnc = enc
+    else cfg.okxLiveApiKeyEnc = enc
   }
-  if (typeof patch.okxSecret === 'string') {
-    const key = patch.okxSecret.trim()
-    cfg.okxSecretEnc = key ? encryptKey(key) : cfg.okxSecretEnc
+  if (typeof patch.okxSecret === 'string' && patch.okxSecret.trim()) {
+    const enc = encryptKey(patch.okxSecret.trim())
+    if (cfg.okxDemo) cfg.okxDemoSecretEnc = enc
+    else cfg.okxLiveSecretEnc = enc
   }
-  if (typeof patch.okxPassphrase === 'string') {
-    const key = patch.okxPassphrase.trim()
-    cfg.okxPassphraseEnc = key ? encryptKey(key) : cfg.okxPassphraseEnc
+  if (typeof patch.okxPassphrase === 'string' && patch.okxPassphrase.trim()) {
+    const enc = encryptKey(patch.okxPassphrase.trim())
+    if (cfg.okxDemo) cfg.okxDemoPassphraseEnc = enc
+    else cfg.okxLivePassphraseEnc = enc
   }
   writeStored(cfg)
   return getPublicConfig(accountMode)

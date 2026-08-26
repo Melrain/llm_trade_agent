@@ -1,7 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 
 import type { AgentConfigPatch, AgentRecord } from '../../preload/agent-types'
-import type { TradeVenue } from '../../preload/okx-types'
+import { isTradeAsset, type TradeVenue } from '../../preload/okx-types'
 import { accountModeFromTradeMode } from '../../preload/mt5-types'
 import type { SnapshotService } from '../snapshot/service'
 import { getPublicConfig, setConfig } from './config'
@@ -37,6 +37,7 @@ function asPatch(raw: unknown): AgentConfigPatch {
   if (row.fixedVolume === null) patch.fixedVolume = null
   else if (typeof row.fixedVolume === 'number') patch.fixedVolume = row.fixedVolume
   if (row.venue === 'mt5' || row.venue === 'okx') patch.venue = row.venue as TradeVenue
+  if (isTradeAsset(row.asset)) patch.asset = row.asset
   if (typeof row.okxInstId === 'string') patch.okxInstId = row.okxInstId
   if (typeof row.okxDemo === 'boolean') patch.okxDemo = row.okxDemo
   if (typeof row.okxLeverage === 'number') patch.okxLeverage = row.okxLeverage
@@ -74,6 +75,7 @@ export function registerAgentIpc(engine: AgentEngine, snapshots: SnapshotService
     engine.syncTimer()
     const relink =
       prev.venue !== next.venue ||
+      prev.asset !== next.asset ||
       prev.okx.instId !== next.okx.instId ||
       prev.okx.demo !== next.okx.demo ||
       Boolean(patch.okxApiKey || patch.okxSecret || patch.okxPassphrase)

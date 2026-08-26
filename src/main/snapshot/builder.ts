@@ -11,14 +11,14 @@ import type {
   SnapshotSourceStatus,
   SnapshotTimeframe
 } from '../../preload/snapshot-types'
-import { isCryptoRelevant, isGoldRelevant } from '../collectors/news/rss'
+import { isCryptoRelevant } from '../collectors/news/rss'
 import type { TradeVenue } from '../../preload/okx-types'
 
 const DEFAULT_MAX_VOLUME = 0.1
 const DEFAULT_RISK_PCT = 0.01
 const HALT_MS = 15 * 60 * 1000
 const PRICE_STALE_MS = 5 * 60 * 1000
-/** 点差超过 0.15×H1 ATR 且超过绝对下限时视为异常（黄金正常 0.2–0.4） */
+/** 点差超过 0.15×H1 ATR 且超过绝对下限时视为异常（BTC/ETH 现货点差因经纪商差异较大） */
 const SPREAD_ATR_RATIO = 0.15
 const SPREAD_FLOOR = 1.0
 const NEWS_SUMMARY_LEN = 220
@@ -142,14 +142,12 @@ export function buildDecisionSnapshot(input: BuilderInput): DecisionSnapshot {
   }))
 
   const halted = haltReason(market, calendar, now, venue)
-  const headlines = news.headlines
-    .filter(venue === 'okx' ? isCryptoRelevant : isGoldRelevant)
-    .slice(0, 8)
+  const headlines = news.headlines.filter(isCryptoRelevant).slice(0, 8)
 
   return {
     meta: {
       snapshotId: randomUUID(),
-      symbol: market.symbol || (venue === 'okx' ? 'BTC-USDT-SWAP' : 'XAUUSD'),
+      symbol: market.symbol || (venue === 'okx' ? 'BTC-USDT-SWAP' : 'BTCUSD'),
       generatedAt: new Date(now).toISOString(),
       barTime: venue === 'okx' ? 'utc' : 'mt5-server',
       venue
@@ -161,7 +159,7 @@ export function buildDecisionSnapshot(input: BuilderInput): DecisionSnapshot {
         pm.health.lastError,
         pm.health.status === 'degraded'
       ),
-      // 抓取成功但当下没有黄金相关新闻也算正常，不应报 unavailable
+      // 抓取成功但当下没有加密相关新闻也算正常，不应报 unavailable
       news: sourceOf(
         Boolean(news.asOf) || headlines.length > 0,
         news.lastError,

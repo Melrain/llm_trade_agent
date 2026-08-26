@@ -1,5 +1,11 @@
 import type { AccountMode, Mt5TradeRequest } from './mt5-types'
-import type { OkxPublicConfig, OkxTdMode, OkxTradeIntent, TradeVenue } from './okx-types'
+import type {
+  OkxPublicConfig,
+  OkxTdMode,
+  OkxTradeIntent,
+  TradeAsset,
+  TradeVenue
+} from './okx-types'
 
 /** 本引擎发出的所有订单都带这个 magic，用于对账和识别自有仓位 */
 export const AGENT_MAGIC = 260820
@@ -108,6 +114,7 @@ export type AgentPublicConfig = {
   riskPct: number
   fixedVolume: number | null
   venue: TradeVenue
+  asset: TradeAsset
   okx: OkxPublicConfig
 }
 
@@ -123,6 +130,7 @@ export type AgentConfigPatch = {
   riskPct?: number
   fixedVolume?: number | null
   venue?: TradeVenue
+  asset?: TradeAsset
   okxInstId?: string
   okxDemo?: boolean
   okxLeverage?: number
