@@ -41,7 +41,7 @@ function tf(name: string, pack: SnapshotTimeframe | null): string {
 }
 
 export const PROMPT_VERSION = 'trader-v1.4'
-export const OKX_PROMPT_VERSION = 'trader-okx-v1.1'
+export const OKX_PROMPT_VERSION = 'trader-okx-v1.2'
 
 export function promptVersion(venue: TradeVenue = 'mt5'): string {
   return venue === 'okx' ? OKX_PROMPT_VERSION : PROMPT_VERSION

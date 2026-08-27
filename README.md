@@ -5,7 +5,7 @@
 支持两个交易场所，在 **设置 → 交易场所** 切换：
 
 - **MT5**：**BTC / ETH / 黄金** 现货报价（如 `BTCUSD` / `ETHUSD` / `XAUUSD`），默认黄金，仅 Windows（官方 Python 接口限制）。
-- **OKX**：USDT 永续 `BTC-USDT-SWAP` / `ETH-USDT-SWAP` / `XAU-USDT-SWAP`，Windows / macOS / Linux 都可跑行情；下单需要 OKX API Key。顶栏可立刻切换 **模拟盘 / 实盘**，两套密钥分开保存。
+- **OKX**：USDT 永续 `BTC-USDT-SWAP` / `ETH-USDT-SWAP`（黄金只走 MT5），Windows / macOS / Linux 都可跑行情；下单需要 OKX API Key。顶栏可立刻切换 **模拟盘 / 实盘**，两套密钥分开保存。
 
 实验性项目，建议先在 Demo / 模拟盘跑通，再开实盘。
 
@@ -86,7 +86,7 @@
 ### 6. 改用 OKX 自动交易
 
 1. **设置 → 交易场所** 选 **OKX · USDT 永续**。
-2. 选品种 **BTC**、**ETH** 或 **黄金**（合约自动对应 `BTC-USDT-SWAP` / `ETH-USDT-SWAP` / `XAU-USDT-SWAP`），再设杠杆、全仓或逐仓。
+2. 选品种 **BTC** 或 **ETH**（合约自动对应 `BTC-USDT-SWAP` / `ETH-USDT-SWAP`），再设杠杆、全仓或逐仓。黄金只走 MT5，在 OKX 下点黄金会切回 MT5。
 3. 顶栏或设置里切到 **模拟盘**（推荐），填写该盘口的 API Key / Secret / Passphrase，点 **测试连接**。实盘密钥另存一套，切换时立刻生效。
 4. **设置 → 风控** 里的上限此时按 **合约张数** 计，不是 MT5 手数。
 5. 顶栏出现 DEMO / REAL 后，按上面第 4、5 步先手动决策再开总闸。

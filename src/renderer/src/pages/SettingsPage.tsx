@@ -164,6 +164,11 @@ export function SettingsPage(): JSX.Element {
 
   function switchAsset(next: TradeAsset): void {
     if (next === asset) return
+    if (next === 'XAU') {
+      setVenue('mt5')
+      void saveConfig({ venue: 'mt5', asset: 'XAU' })
+      return
+    }
     void saveConfig({ asset: next })
   }
 
@@ -277,7 +282,7 @@ export function SettingsPage(): JSX.Element {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="mt5">MT5 · BTC / ETH / 黄金</SelectItem>
-                  <SelectItem value="okx">OKX · USDT 永续</SelectItem>
+                  <SelectItem value="okx">OKX · BTC / ETH 永续</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
@@ -285,8 +290,8 @@ export function SettingsPage(): JSX.Element {
               label="交易品种"
               hint={
                 venue === 'okx'
-                  ? 'OKX 合约由品种自动对应：BTC-USDT-SWAP / ETH-USDT-SWAP / XAU-USDT-SWAP。立刻生效。'
-                  : 'MT5 会按经纪商品名探测 BTCUSD / ETHUSD / XAUUSD 一类报价。立刻生效。'
+                  ? 'OKX 只做 BTC / ETH 永续（BTC-USDT-SWAP / ETH-USDT-SWAP）。黄金只走 MT5，点黄金会切回 MT5。'
+                  : 'MT5 可做 BTC / ETH / 黄金。探测 BTCUSD / ETHUSD / XAUUSD 一类报价。立刻生效。'
               }
             >
               <Segmented

@@ -166,7 +166,9 @@ export function TopBar(): JSX.Element {
         disabled={saving || !config}
         options={TRADE_ASSETS.map((id) => ({ value: id, label: TRADE_ASSET_LABELS[id] }))}
         onChange={(next: TradeAsset) => {
-          if (next !== asset) void saveConfig({ asset: next })
+          if (next === asset) return
+          if (next === 'XAU') void saveConfig({ venue: 'mt5', asset: 'XAU' })
+          else void saveConfig({ asset: next })
         }}
       />
 

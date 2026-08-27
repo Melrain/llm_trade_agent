@@ -2,6 +2,7 @@ export type TradeVenue = 'mt5' | 'okx'
 export type TradeAsset = 'BTC' | 'ETH' | 'XAU'
 
 export const TRADE_ASSETS = ['BTC', 'ETH', 'XAU'] as const
+export const OKX_TRADE_ASSETS = ['BTC', 'ETH'] as const
 export const TRADE_ASSET_LABELS: Record<TradeAsset, string> = {
   BTC: 'BTC',
   ETH: 'ETH',
@@ -18,10 +19,15 @@ export const DEFAULT_OKX_INST_ID = 'BTC-USDT-SWAP'
 export const DEFAULT_OKX_LEVERAGE = 5
 export const DEFAULT_OKX_TD_MODE: OkxTdMode = 'cross'
 export const DEFAULT_TRADE_ASSET: TradeAsset = 'XAU'
-export const OKX_INST_PRESETS = ['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'XAU-USDT-SWAP'] as const
+export const DEFAULT_OKX_ASSET: TradeAsset = 'BTC'
+export const OKX_INST_PRESETS = ['BTC-USDT-SWAP', 'ETH-USDT-SWAP'] as const
 
 export function isTradeAsset(value: unknown): value is TradeAsset {
   return value === 'BTC' || value === 'ETH' || value === 'XAU'
+}
+
+export function isOkxTradeAsset(value: unknown): value is TradeAsset {
+  return value === 'BTC' || value === 'ETH'
 }
 
 export function asTradeAsset(value: unknown): TradeAsset {
@@ -33,9 +39,18 @@ export function isGoldMarketSymbol(symbol: string): boolean {
   return u.includes('XAU') || u.includes('GOLD')
 }
 
+export function assetsForVenue(venue: TradeVenue): readonly TradeAsset[] {
+  return venue === 'okx' ? OKX_TRADE_ASSETS : TRADE_ASSETS
+}
+
+/** 黄金只走 MT5。OKX 上的 XAU 回落到 BTC。 */
+export function clampAssetToVenue(venue: TradeVenue, asset: TradeAsset): TradeAsset {
+  if (venue === 'okx' && asset === 'XAU') return DEFAULT_OKX_ASSET
+  return asset
+}
+
 export function okxInstIdForAsset(asset: TradeAsset): string {
   if (asset === 'ETH') return 'ETH-USDT-SWAP'
-  if (asset === 'XAU') return 'XAU-USDT-SWAP'
   return 'BTC-USDT-SWAP'
 }
 
@@ -53,7 +68,8 @@ export function mt5SymbolForAsset(asset: TradeAsset): string {
 }
 
 export function venueSymbol(venue: TradeVenue, asset: TradeAsset): string {
-  return venue === 'okx' ? okxInstIdForAsset(asset) : mt5SymbolForAsset(asset)
+  const next = clampAssetToVenue(venue, asset)
+  return venue === 'okx' ? okxInstIdForAsset(next) : mt5SymbolForAsset(next)
 }
 
 /** 旧版默认 MT5 黄金。对齐 BTC/ETH 时把未选手种写成了 BTC，回退一次。 */

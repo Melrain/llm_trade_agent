@@ -21,7 +21,11 @@ import {
   type Mt5TradeRequest
 } from '../../preload/mt5-types'
 import type { DecisionSnapshot } from '../../preload/snapshot-types'
-import type { OkxOrderResult, OkxTradeIntent } from '../../preload/okx-types'
+import {
+  isGoldMarketSymbol,
+  type OkxOrderResult,
+  type OkxTradeIntent
+} from '../../preload/okx-types'
 import type { Mt5Client } from '../mt5/client'
 import type { OkxClient } from '../okx/client'
 import { buildOkxIntent } from '../okx/order-builder'
@@ -270,6 +274,22 @@ export class AgentEngine {
       promptVersion: promptVersion(venue),
       model: cfg.model,
       tokens: null as AgentRecord['tokens']
+    }
+
+    if (venue === 'okx' && isGoldMarketSymbol(symbol)) {
+      const decision = holdDecision(symbol, '黄金只走 MT5，不能在 OKX 开仓')
+      return this.withPreview(
+        {
+          ...base,
+          decision,
+          parseError: null,
+          riskVerdict: 'reject',
+          riskReason: '黄金只走 MT5',
+          skipped: '黄金只走 MT5'
+        },
+        snapshot,
+        null
+      )
     }
 
     if (snapshot.sources.market !== 'ok') {

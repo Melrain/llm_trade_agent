@@ -3,10 +3,12 @@ import { safeStorage } from 'electron'
 import type { AgentConfigPatch, AgentPublicConfig } from '../../preload/agent-types'
 import type { AccountMode } from '../../preload/mt5-types'
 import {
+  DEFAULT_OKX_INST_ID,
   DEFAULT_OKX_LEVERAGE,
   DEFAULT_OKX_TD_MODE,
   DEFAULT_TRADE_ASSET,
   assetFromInstId,
+  clampAssetToVenue,
   isTradeAsset,
   okxInstIdForAsset,
   restoreMt5GoldDefault,
@@ -162,7 +164,7 @@ function defaults(): StoredConfig {
     venue: 'mt5',
     asset: DEFAULT_TRADE_ASSET,
     mt5GoldDefaultRestored: true,
-    okxInstId: okxInstIdForAsset(DEFAULT_TRADE_ASSET),
+    okxInstId: DEFAULT_OKX_INST_ID,
     okxDemo: true,
     okxLeverage: DEFAULT_OKX_LEVERAGE,
     okxTdMode: DEFAULT_OKX_TD_MODE,
@@ -186,8 +188,11 @@ function normalizeStored(parsed: Partial<StoredConfig>): StoredConfig {
       : defaultMaxVolume(venue)
   const resolved = resolveAsset(parsed)
   const alreadyRestored = parsed.mt5GoldDefaultRestored === true
-  const asset = restoreMt5GoldDefault(venue, resolved, alreadyRestored)
+  const restored = restoreMt5GoldDefault(venue, resolved, alreadyRestored)
+  const asset = clampAssetToVenue(venue, restored)
   const restoredGold = !alreadyRestored && resolved === 'BTC' && asset === 'XAU'
+  const droppedOkxGold = venue === 'okx' && resolved === 'XAU' && asset === 'BTC'
+  const resetGate = restoredGold || droppedOkxGold
   return {
     baseUrl:
       typeof parsed.baseUrl === 'string' && parsed.baseUrl.trim()
@@ -202,8 +207,8 @@ function normalizeStored(parsed: Partial<StoredConfig>): StoredConfig {
       typeof parsed.intervalMs === 'number' && parsed.intervalMs >= 60_000
         ? parsed.intervalMs
         : base.intervalMs,
-    tradingEnabled: restoredGold ? false : parsed.tradingEnabled === true,
-    enabled: restoredGold
+    tradingEnabled: resetGate ? false : parsed.tradingEnabled === true,
+    enabled: resetGate
       ? parsed.enabled === true
       : parsed.enabled === true || parsed.tradingEnabled === true,
     apiKeyEnc: typeof parsed.apiKeyEnc === 'string' ? parsed.apiKeyEnc : null,
@@ -215,12 +220,12 @@ function normalizeStored(parsed: Partial<StoredConfig>): StoredConfig {
         : typeof parsed.fixedVolume === 'number'
           ? clampFixedVolume(parsed.fixedVolume, maxVolume, venue)
           : null,
-    armedLogin: restoredGold
+    armedLogin: resetGate
       ? null
       : typeof parsed.armedLogin === 'number'
         ? parsed.armedLogin
         : null,
-    armedMode: restoredGold
+    armedMode: resetGate
       ? null
       : parsed.armedMode === 'demo' || parsed.armedMode === 'real'
         ? parsed.armedMode
@@ -228,7 +233,7 @@ function normalizeStored(parsed: Partial<StoredConfig>): StoredConfig {
     venue,
     asset,
     mt5GoldDefaultRestored: true,
-    okxInstId: okxInstIdForAsset(asset),
+    okxInstId: okxInstIdForAsset(clampAssetToVenue('okx', asset)),
     okxDemo: parsed.okxDemo !== false,
     okxLeverage:
       typeof parsed.okxLeverage === 'number' ? clampLeverage(parsed.okxLeverage) : base.okxLeverage,
@@ -246,7 +251,14 @@ function readStored(): StoredConfig {
     const parsed = getKvJson<Partial<StoredConfig>>(KV_KEYS.agentConfig)
     if (!parsed) return defaults()
     const next = normalizeStored(parsed)
-    if (parsed.mt5GoldDefaultRestored !== true) writeStored(next)
+    if (
+      parsed.mt5GoldDefaultRestored !== true ||
+      parsed.asset !== next.asset ||
+      parsed.okxInstId !== next.okxInstId ||
+      (parsed.tradingEnabled === true && !next.tradingEnabled)
+    ) {
+      writeStored(next)
+    }
     return next
   } catch (error) {
     console.warn('[agent] config read', error instanceof Error ? error.message : error)
@@ -431,12 +443,29 @@ export function setConfig(
   if (isTradeAsset(patch.asset)) {
     if (patch.asset !== cfg.asset) disarm(cfg)
     cfg.asset = patch.asset
-    cfg.okxInstId = okxInstIdForAsset(patch.asset)
+    if (patch.asset === 'XAU' && cfg.venue !== 'mt5') {
+      disarm(cfg)
+      cfg.venue = 'mt5'
+      if (typeof patch.maxVolume !== 'number') {
+        cfg.maxVolume = defaultMaxVolume('mt5')
+      }
+      cfg.fixedVolume = null
+    }
   } else if (typeof patch.okxInstId === 'string' && patch.okxInstId.trim()) {
     const next = normalizeInstId(patch.okxInstId)
-    if (next !== cfg.okxInstId) disarm(cfg)
-    cfg.okxInstId = next
-    cfg.asset = assetFromInstId(next)
+    const nextAsset = clampAssetToVenue(cfg.venue, assetFromInstId(next))
+    if (next !== cfg.okxInstId || nextAsset !== cfg.asset) disarm(cfg)
+    cfg.asset = nextAsset
+    if (nextAsset === 'XAU') cfg.venue = 'mt5'
+  }
+  if (cfg.venue === 'okx' && cfg.asset === 'XAU') {
+    disarm(cfg)
+    cfg.asset = 'BTC'
+  }
+  cfg.okxInstId = okxInstIdForAsset(clampAssetToVenue('okx', cfg.asset))
+  cfg.maxVolume = clampMaxVolume(cfg.maxVolume, cfg.venue)
+  if (cfg.fixedVolume != null) {
+    cfg.fixedVolume = clampFixedVolume(cfg.fixedVolume, cfg.maxVolume, cfg.venue)
   }
   if (typeof patch.okxDemo === 'boolean') {
     if (patch.okxDemo !== cfg.okxDemo) disarm(cfg)
