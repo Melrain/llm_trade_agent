@@ -12,7 +12,12 @@ import type {
   SnapshotTimeframe
 } from '../../preload/snapshot-types'
 import { isCryptoRelevant, isGoldRelevant } from '../collectors/news/rss'
-import { DEFAULT_TRADE_ASSET, isGoldMarketSymbol, venueSymbol, type TradeVenue } from '../../preload/okx-types'
+import {
+  DEFAULT_TRADE_ASSET,
+  isGoldMarketSymbol,
+  venueSymbol,
+  type TradeVenue
+} from '../../preload/okx-types'
 
 const DEFAULT_MAX_VOLUME = 0.1
 const DEFAULT_RISK_PCT = 0.01
