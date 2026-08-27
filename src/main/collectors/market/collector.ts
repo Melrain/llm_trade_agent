@@ -59,7 +59,7 @@ function emptyTimeframes(): MarketSnapshot['timeframes'] {
 }
 
 function emptySnapshot(
-  symbol = venueSymbol('mt5', 'BTC'),
+  symbol = venueSymbol('mt5', 'XAU'),
   venue: 'mt5' | 'okx' = 'mt5'
 ): MarketSnapshot {
   return {

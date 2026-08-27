@@ -12,7 +12,7 @@ import type {
   SnapshotTimeframe
 } from '../../preload/snapshot-types'
 import { isCryptoRelevant, isGoldRelevant } from '../collectors/news/rss'
-import { isGoldMarketSymbol, type TradeVenue } from '../../preload/okx-types'
+import { DEFAULT_TRADE_ASSET, isGoldMarketSymbol, venueSymbol, type TradeVenue } from '../../preload/okx-types'
 
 const DEFAULT_MAX_VOLUME = 0.1
 const DEFAULT_RISK_PCT = 0.01
@@ -142,7 +142,7 @@ export function buildDecisionSnapshot(input: BuilderInput): DecisionSnapshot {
   }))
 
   const halted = haltReason(market, calendar, now, venue)
-  const symbol = market.symbol || (venue === 'okx' ? 'BTC-USDT-SWAP' : 'BTCUSD')
+  const symbol = market.symbol || venueSymbol(venue, DEFAULT_TRADE_ASSET)
   const headlines = news.headlines
     .filter(isGoldMarketSymbol(symbol) ? isGoldRelevant : isCryptoRelevant)
     .slice(0, 8)

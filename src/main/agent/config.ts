@@ -3,13 +3,13 @@ import { safeStorage } from 'electron'
 import type { AgentConfigPatch, AgentPublicConfig } from '../../preload/agent-types'
 import type { AccountMode } from '../../preload/mt5-types'
 import {
-  DEFAULT_OKX_INST_ID,
   DEFAULT_OKX_LEVERAGE,
   DEFAULT_OKX_TD_MODE,
   DEFAULT_TRADE_ASSET,
   assetFromInstId,
   isTradeAsset,
   okxInstIdForAsset,
+  restoreMt5GoldDefault,
   type OkxTdMode,
   type TradeAsset,
   type TradeVenue
@@ -47,6 +47,8 @@ type StoredConfig = {
   armedMode: 'demo' | 'real' | null
   venue: TradeVenue
   asset: TradeAsset
+  /** 对齐 BTC/ETH 时曾把未选手种的 MT5 配置写成 BTC；true 表示已回退过黄金默认 */
+  mt5GoldDefaultRestored: boolean
   okxInstId: string
   okxDemo: boolean
   okxLeverage: number
@@ -159,7 +161,8 @@ function defaults(): StoredConfig {
     armedMode: null,
     venue: 'mt5',
     asset: DEFAULT_TRADE_ASSET,
-    okxInstId: DEFAULT_OKX_INST_ID,
+    mt5GoldDefaultRestored: true,
+    okxInstId: okxInstIdForAsset(DEFAULT_TRADE_ASSET),
     okxDemo: true,
     okxLeverage: DEFAULT_OKX_LEVERAGE,
     okxTdMode: DEFAULT_OKX_TD_MODE,
@@ -181,6 +184,10 @@ function normalizeStored(parsed: Partial<StoredConfig>): StoredConfig {
     typeof parsed.maxVolume === 'number'
       ? clampMaxVolume(parsed.maxVolume, venue)
       : defaultMaxVolume(venue)
+  const resolved = resolveAsset(parsed)
+  const alreadyRestored = parsed.mt5GoldDefaultRestored === true
+  const asset = restoreMt5GoldDefault(venue, resolved, alreadyRestored)
+  const restoredGold = !alreadyRestored && resolved === 'BTC' && asset === 'XAU'
   return {
     baseUrl:
       typeof parsed.baseUrl === 'string' && parsed.baseUrl.trim()
@@ -195,8 +202,10 @@ function normalizeStored(parsed: Partial<StoredConfig>): StoredConfig {
       typeof parsed.intervalMs === 'number' && parsed.intervalMs >= 60_000
         ? parsed.intervalMs
         : base.intervalMs,
-    tradingEnabled: parsed.tradingEnabled === true,
-    enabled: parsed.enabled === true || parsed.tradingEnabled === true,
+    tradingEnabled: restoredGold ? false : parsed.tradingEnabled === true,
+    enabled: restoredGold
+      ? parsed.enabled === true
+      : parsed.enabled === true || parsed.tradingEnabled === true,
     apiKeyEnc: typeof parsed.apiKeyEnc === 'string' ? parsed.apiKeyEnc : null,
     maxVolume,
     riskPct: typeof parsed.riskPct === 'number' ? clampRiskPct(parsed.riskPct) : base.riskPct,
@@ -206,11 +215,20 @@ function normalizeStored(parsed: Partial<StoredConfig>): StoredConfig {
         : typeof parsed.fixedVolume === 'number'
           ? clampFixedVolume(parsed.fixedVolume, maxVolume, venue)
           : null,
-    armedLogin: typeof parsed.armedLogin === 'number' ? parsed.armedLogin : null,
-    armedMode: parsed.armedMode === 'demo' || parsed.armedMode === 'real' ? parsed.armedMode : null,
+    armedLogin: restoredGold
+      ? null
+      : typeof parsed.armedLogin === 'number'
+        ? parsed.armedLogin
+        : null,
+    armedMode: restoredGold
+      ? null
+      : parsed.armedMode === 'demo' || parsed.armedMode === 'real'
+        ? parsed.armedMode
+        : null,
     venue,
-    asset: resolveAsset(parsed),
-    okxInstId: okxInstIdForAsset(resolveAsset(parsed)),
+    asset,
+    mt5GoldDefaultRestored: true,
+    okxInstId: okxInstIdForAsset(asset),
     okxDemo: parsed.okxDemo !== false,
     okxLeverage:
       typeof parsed.okxLeverage === 'number' ? clampLeverage(parsed.okxLeverage) : base.okxLeverage,
@@ -227,7 +245,9 @@ function readStored(): StoredConfig {
   try {
     const parsed = getKvJson<Partial<StoredConfig>>(KV_KEYS.agentConfig)
     if (!parsed) return defaults()
-    return normalizeStored(parsed)
+    const next = normalizeStored(parsed)
+    if (parsed.mt5GoldDefaultRestored !== true) writeStored(next)
+    return next
   } catch (error) {
     console.warn('[agent] config read', error instanceof Error ? error.message : error)
     return defaults()

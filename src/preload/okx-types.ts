@@ -17,7 +17,7 @@ export type OkxOrdType = 'market' | 'limit' | 'post_only' | 'fok' | 'ioc'
 export const DEFAULT_OKX_INST_ID = 'BTC-USDT-SWAP'
 export const DEFAULT_OKX_LEVERAGE = 5
 export const DEFAULT_OKX_TD_MODE: OkxTdMode = 'cross'
-export const DEFAULT_TRADE_ASSET: TradeAsset = 'BTC'
+export const DEFAULT_TRADE_ASSET: TradeAsset = 'XAU'
 export const OKX_INST_PRESETS = ['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'XAU-USDT-SWAP'] as const
 
 export function isTradeAsset(value: unknown): value is TradeAsset {
@@ -54,6 +54,17 @@ export function mt5SymbolForAsset(asset: TradeAsset): string {
 
 export function venueSymbol(venue: TradeVenue, asset: TradeAsset): string {
   return venue === 'okx' ? okxInstIdForAsset(asset) : mt5SymbolForAsset(asset)
+}
+
+/** 旧版默认 MT5 黄金。对齐 BTC/ETH 时把未选手种写成了 BTC，回退一次。 */
+export function restoreMt5GoldDefault(
+  venue: TradeVenue,
+  asset: TradeAsset,
+  alreadyRestored: boolean
+): TradeAsset {
+  if (alreadyRestored) return asset
+  if (venue === 'mt5' && asset === 'BTC') return 'XAU'
+  return asset
 }
 
 export type OkxInstrumentSpec = {

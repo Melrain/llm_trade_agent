@@ -4,7 +4,7 @@
 
 支持两个交易场所，在 **设置 → 交易场所** 切换：
 
-- **MT5**：**BTC / ETH / 黄金** 现货报价（如 `BTCUSD` / `ETHUSD` / `XAUUSD`），仅 Windows（官方 Python 接口限制）。
+- **MT5**：**BTC / ETH / 黄金** 现货报价（如 `BTCUSD` / `ETHUSD` / `XAUUSD`），默认黄金，仅 Windows（官方 Python 接口限制）。
 - **OKX**：USDT 永续 `BTC-USDT-SWAP` / `ETH-USDT-SWAP` / `XAU-USDT-SWAP`，Windows / macOS / Linux 都可跑行情；下单需要 OKX API Key。顶栏可立刻切换 **模拟盘 / 实盘**，两套密钥分开保存。
 
 实验性项目，建议先在 Demo / 模拟盘跑通，再开实盘。

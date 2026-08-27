@@ -12,8 +12,8 @@ const idleHealth: PmHealth = {
 }
 
 const initialState = {
-  symbol: 'BTCUSD',
-  displayName: 'BTC',
+  symbol: 'XAUUSD',
+  displayName: '黄金',
   quotes: [],
   health: idleHealth,
   loading: true,
@@ -42,7 +42,7 @@ export const usePmStore = create<PmStore>()((set, get) => ({
       })
     }
     try {
-      const snapshot = await window.api.pm.getSnapshot('BTCUSD')
+      const snapshot = await window.api.pm.getSnapshot('XAUUSD')
       get().applySnapshot(snapshot)
     } catch (error) {
       console.error('[pm] snapshot failed', error)
@@ -52,7 +52,7 @@ export const usePmStore = create<PmStore>()((set, get) => ({
   refresh: async () => {
     set({ refreshing: true })
     try {
-      const snapshot = await window.api.pm.refresh('BTCUSD')
+      const snapshot = await window.api.pm.refresh('XAUUSD')
       get().applySnapshot(snapshot)
     } catch (error) {
       console.error('[pm] refresh failed', error)

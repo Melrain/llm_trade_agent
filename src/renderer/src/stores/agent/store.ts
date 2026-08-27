@@ -16,9 +16,9 @@ const idleConfig: AgentPublicConfig = {
   riskPct: 0.01,
   fixedVolume: null,
   venue: 'mt5',
-  asset: 'BTC',
+  asset: 'XAU',
   okx: {
-    instId: 'BTC-USDT-SWAP',
+    instId: 'XAU-USDT-SWAP',
     demo: true,
     leverage: 5,
     tdMode: 'cross',

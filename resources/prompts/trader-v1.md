@@ -23,7 +23,7 @@
 ```json
 {
   "action": "open_buy | open_sell | close_position | adjust_sltp | hold",
-  "symbol": "BTCUSD",
+  "symbol": "XAUUSD",
   "volume": 0.01,
   "sl": 0,
   "tp": 0,
