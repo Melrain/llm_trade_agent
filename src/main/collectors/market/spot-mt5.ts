@@ -4,12 +4,14 @@ import type { Mt5Client } from '../../mt5/client'
 
 const ASSET_CANDIDATES: Record<TradeAsset, string[]> = {
   BTC: ['BTCUSD', 'BTCUSDm', 'BTCUSDc', 'BTCUSDT', 'BTCUSD.s', 'XBTUSD', 'BTC'],
-  ETH: ['ETHUSD', 'ETHUSDm', 'ETHUSDc', 'ETHUSDT', 'ETHUSD.s', 'ETH']
+  ETH: ['ETHUSD', 'ETHUSDm', 'ETHUSDc', 'ETHUSDT', 'ETHUSD.s', 'ETH'],
+  XAU: ['XAUUSD', 'XAUUSDm', 'XAUUSDc', 'XAUUSD.s', 'GOLD']
 }
 
 const ASSET_GROUPS: Record<TradeAsset, string[]> = {
   BTC: ['*BTCUSD*', '*BTCUSDT*', '*XBTUSD*', '*BTC*'],
-  ETH: ['*ETHUSD*', '*ETHUSDT*', '*ETH*']
+  ETH: ['*ETHUSD*', '*ETHUSDT*', '*ETH*'],
+  XAU: ['*XAUUSD*', '*XAU*', '*GOLD*']
 }
 
 export type Mt5SpotTick = {
@@ -50,12 +52,19 @@ function scoreAssetName(name: string, asset: TradeAsset): number {
     if (u.startsWith('BTCUSD')) return 90
     if (u.includes('BTC') && u.includes('USD')) return 70
     if (u.includes('BTC')) return 20
-  } else {
+    return 0
+  }
+  if (asset === 'ETH') {
     if (u === 'ETHUSD' || u === 'ETHUSDT') return 100
     if (u.startsWith('ETHUSD')) return 90
     if (u.includes('ETH') && u.includes('USD')) return 70
     if (u.includes('ETH')) return 20
+    return 0
   }
+  if (u === 'XAUUSD') return 100
+  if (u.startsWith('XAUUSD')) return 80
+  if (u === 'GOLD' || u.startsWith('GOLD')) return 50
+  if (u.includes('XAU')) return 30
   return 0
 }
 
@@ -109,7 +118,7 @@ async function listAssetSymbols(mt5: Mt5Client, asset: TradeAsset): Promise<stri
   return [...names].sort((a, b) => scoreAssetName(b, asset) - scoreAssetName(a, asset))
 }
 
-export async function fetchCryptoSpotFromMt5(
+export async function fetchSpotFromMt5(
   mt5: Mt5Client,
   asset: TradeAsset,
   cachedSymbol?: string | null

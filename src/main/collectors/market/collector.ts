@@ -32,7 +32,7 @@ import {
   type TradeAsset,
   type TradeVenue
 } from '../../../preload/okx-types'
-import { fetchCryptoSpotFromMt5 } from './spot-mt5'
+import { fetchSpotFromMt5 } from './spot-mt5'
 
 const OKX_BARS: Record<MarketTimeframeId, string> = {
   M15: '15m',
@@ -403,7 +403,7 @@ export class MarketCollector {
   private async buildMt5Snapshot(): Promise<MarketSnapshot> {
     const asset = getAsset()
     const cached = this.cachedSpot?.asset === asset ? this.cachedSpot.symbol : null
-    const tick = await fetchCryptoSpotFromMt5(this.mt5, asset, cached)
+    const tick = await fetchSpotFromMt5(this.mt5, asset, cached)
     this.cachedSpot = { asset, symbol: tick.symbol }
 
     const [infoRaw, accountRaw, positionsRaw, ...rateRows] = await Promise.all([

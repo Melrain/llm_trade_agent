@@ -104,8 +104,12 @@ export function isCryptoRelevant(item: Pick<NewsHeadline, 'tags'>): boolean {
   return item.tags.some((tag) => CRYPTO_KEEP_TAGS.has(tag))
 }
 
+export function isTradeRelevant(item: Pick<NewsHeadline, 'tags'>): boolean {
+  return isGoldRelevant(item) || isCryptoRelevant(item)
+}
+
 export function selectHeadlines(items: NewsHeadline[], now = Date.now(), max = 8): NewsHeadline[] {
-  const tagged = items.filter((item) => item.title && isCryptoRelevant(item))
+  const tagged = items.filter((item) => item.title && isTradeRelevant(item))
   const within = (hours: number): NewsHeadline[] =>
     tagged.filter((item) => now - Date.parse(item.publishedAt) <= hours * 60 * 60 * 1000)
 
