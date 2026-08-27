@@ -3,7 +3,7 @@ import { join } from 'path'
 import { app } from 'electron'
 
 import type { AgentRecord } from '../../preload/agent-types'
-import type { TradeVenue } from '../../preload/okx-types'
+import { isGoldMarketSymbol, type TradeVenue } from '../../preload/okx-types'
 import type { DecisionSnapshot, SnapshotBar, SnapshotTimeframe } from '../../preload/snapshot-types'
 
 const TREND: Record<string, string> = {
@@ -40,8 +40,8 @@ function tf(name: string, pack: SnapshotTimeframe | null): string {
   ].join('\n')
 }
 
-export const PROMPT_VERSION = 'trader-v1.3'
-export const OKX_PROMPT_VERSION = 'trader-okx-v1.0'
+export const PROMPT_VERSION = 'trader-v1.4'
+export const OKX_PROMPT_VERSION = 'trader-okx-v1.1'
 
 export function promptVersion(venue: TradeVenue = 'mt5'): string {
   return venue === 'okx' ? OKX_PROMPT_VERSION : PROMPT_VERSION
@@ -109,7 +109,9 @@ export function renderSnapshotMarkdown(snapshot: DecisionSnapshot): string {
   const lines: string[] = [
     snapshot.meta.venue === 'okx'
       ? `# OKX 永续快照 ${snapshot.meta.symbol}`
-      : `# 加密快照 ${snapshot.meta.symbol}`,
+      : isGoldMarketSymbol(snapshot.meta.symbol)
+        ? `# 黄金快照 ${snapshot.meta.symbol}`
+        : `# 加密快照 ${snapshot.meta.symbol}`,
     `生成 ${snapshot.meta.generatedAt}`,
     snapshot.meta.venue === 'okx'
       ? `K 线时间为 UTC（${snapshot.meta.barTime}）。日历为 UTC。`

@@ -82,8 +82,8 @@ export class PolymarketCollector {
       ? this.quotes.filter((q) => q.symbol === instrument.symbol)
       : this.quotes
     return {
-      symbol: instrument?.symbol ?? key ?? 'BTC',
-      displayName: instrument?.displayName ?? key ?? 'BTC',
+      symbol: instrument?.symbol ?? key ?? 'XAUUSD',
+      displayName: instrument?.displayName ?? key ?? '黄金',
       quotes,
       health: this.health
     }

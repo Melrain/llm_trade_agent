@@ -8,8 +8,9 @@ import type { MarketCollector } from '../collectors/market'
 import type { NewsCollector } from '../collectors/news'
 import type { PolymarketCollector } from '../collectors/polymarket'
 import type { Mt5Client } from '../mt5/client'
-import { getPublicConfig, getVenue } from '../agent/config'
+import { getAsset, getPublicConfig, getVenue } from '../agent/config'
 import type { OkxClient } from '../okx/client'
+import { venueSymbol } from '../../preload/okx-types'
 import { buildDecisionSnapshot } from './builder'
 import { startOfLocalDaySec, sumRealizedPnl } from './daily-pnl'
 
@@ -18,10 +19,12 @@ type Listener = (snapshot: DecisionSnapshot) => void
 const PNL_TTL_MS = 30_000
 
 function emptySnapshot(): DecisionSnapshot {
+  const venue = getVenue()
+  const symbol = venueSymbol(venue, getAsset())
   return buildDecisionSnapshot({
     market: {
-      venue: 'mt5',
-      symbol: 'BTCUSD',
+      venue,
+      symbol,
       asOf: null,
       ready: false,
       lastError: null,
@@ -35,8 +38,8 @@ function emptySnapshot(): DecisionSnapshot {
       positions: []
     },
     pm: {
-      symbol: 'BTCUSD',
-      displayName: 'BTC',
+      symbol,
+      displayName: getAsset(),
       quotes: [],
       health: {
         status: 'idle',
@@ -48,7 +51,7 @@ function emptySnapshot(): DecisionSnapshot {
     },
     news: { asOf: null, lastError: null, headlines: [], calendar: [] },
     dailyPnlRealized: null,
-    venue: 'mt5'
+    venue
   })
 }
 

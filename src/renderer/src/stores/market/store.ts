@@ -5,7 +5,7 @@ import type { MarketStore } from './types'
 
 const empty: MarketSnapshot = {
   venue: 'mt5',
-  symbol: 'BTCUSD',
+  symbol: 'XAUUSD',
   asOf: null,
   ready: false,
   lastError: null,

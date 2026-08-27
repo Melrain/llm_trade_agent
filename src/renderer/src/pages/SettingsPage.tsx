@@ -23,7 +23,13 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useAgentStore, useNewsStore, usePmStore } from '@/stores'
-import { TRADE_ASSETS, type TradeAsset, type TradeVenue } from '../../../preload/okx-types'
+import {
+  TRADE_ASSETS,
+  TRADE_ASSET_LABELS,
+  asTradeAsset,
+  type TradeAsset,
+  type TradeVenue
+} from '../../../preload/okx-types'
 import type { UpdaterStatus } from '../../../preload/updater-types'
 
 const INTERVALS = [
@@ -106,7 +112,7 @@ export function SettingsPage(): JSX.Element {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [config])
 
-  const asset = config?.asset === 'ETH' ? 'ETH' : 'BTC'
+  const asset = asTradeAsset(config?.asset)
   const okxDemo = config?.okx?.demo !== false
   const hasDemoKeys = Boolean(config?.okx?.hasDemoKeys)
   const hasLiveKeys = Boolean(config?.okx?.hasLiveKeys)
@@ -270,7 +276,7 @@ export function SettingsPage(): JSX.Element {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="mt5">MT5 · BTC / ETH</SelectItem>
+                  <SelectItem value="mt5">MT5 · BTC / ETH / 黄金</SelectItem>
                   <SelectItem value="okx">OKX · USDT 永续</SelectItem>
                 </SelectContent>
               </Select>
@@ -279,15 +285,15 @@ export function SettingsPage(): JSX.Element {
               label="交易品种"
               hint={
                 venue === 'okx'
-                  ? 'OKX 合约由品种自动对应：BTC-USDT-SWAP / ETH-USDT-SWAP。立刻生效。'
-                  : 'MT5 会按经纪商品名探测 BTCUSD / ETHUSD 一类报价。立刻生效。'
+                  ? 'OKX 合约由品种自动对应：BTC-USDT-SWAP / ETH-USDT-SWAP / XAU-USDT-SWAP。立刻生效。'
+                  : 'MT5 会按经纪商品名探测 BTCUSD / ETHUSD / XAUUSD 一类报价。立刻生效。'
               }
             >
               <Segmented
                 size="md"
                 value={asset}
                 disabled={saving}
-                options={TRADE_ASSETS.map((id) => ({ value: id, label: id }))}
+                options={TRADE_ASSETS.map((id) => ({ value: id, label: TRADE_ASSET_LABELS[id] }))}
                 onChange={switchAsset}
               />
             </Field>

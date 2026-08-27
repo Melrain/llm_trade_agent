@@ -1,7 +1,12 @@
 export type TradeVenue = 'mt5' | 'okx'
-export type TradeAsset = 'BTC' | 'ETH'
+export type TradeAsset = 'BTC' | 'ETH' | 'XAU'
 
-export const TRADE_ASSETS = ['BTC', 'ETH'] as const
+export const TRADE_ASSETS = ['BTC', 'ETH', 'XAU'] as const
+export const TRADE_ASSET_LABELS: Record<TradeAsset, string> = {
+  BTC: 'BTC',
+  ETH: 'ETH',
+  XAU: '黄金'
+}
 
 export type OkxTdMode = 'cross' | 'isolated'
 export type OkxPosMode = 'net_mode' | 'long_short_mode'
@@ -12,27 +17,54 @@ export type OkxOrdType = 'market' | 'limit' | 'post_only' | 'fok' | 'ioc'
 export const DEFAULT_OKX_INST_ID = 'BTC-USDT-SWAP'
 export const DEFAULT_OKX_LEVERAGE = 5
 export const DEFAULT_OKX_TD_MODE: OkxTdMode = 'cross'
-export const DEFAULT_TRADE_ASSET: TradeAsset = 'BTC'
-export const OKX_INST_PRESETS = ['BTC-USDT-SWAP', 'ETH-USDT-SWAP'] as const
+export const DEFAULT_TRADE_ASSET: TradeAsset = 'XAU'
+export const OKX_INST_PRESETS = ['BTC-USDT-SWAP', 'ETH-USDT-SWAP', 'XAU-USDT-SWAP'] as const
 
 export function isTradeAsset(value: unknown): value is TradeAsset {
-  return value === 'BTC' || value === 'ETH'
+  return value === 'BTC' || value === 'ETH' || value === 'XAU'
+}
+
+export function asTradeAsset(value: unknown): TradeAsset {
+  return isTradeAsset(value) ? value : DEFAULT_TRADE_ASSET
+}
+
+export function isGoldMarketSymbol(symbol: string): boolean {
+  const u = symbol.toUpperCase()
+  return u.includes('XAU') || u.includes('GOLD')
 }
 
 export function okxInstIdForAsset(asset: TradeAsset): string {
-  return asset === 'ETH' ? 'ETH-USDT-SWAP' : 'BTC-USDT-SWAP'
+  if (asset === 'ETH') return 'ETH-USDT-SWAP'
+  if (asset === 'XAU') return 'XAU-USDT-SWAP'
+  return 'BTC-USDT-SWAP'
 }
 
 export function assetFromInstId(instId: string): TradeAsset {
-  return instId.toUpperCase().includes('ETH') ? 'ETH' : 'BTC'
+  const u = instId.toUpperCase()
+  if (u.includes('XAU') || u.includes('GOLD')) return 'XAU'
+  if (u.includes('ETH')) return 'ETH'
+  return 'BTC'
 }
 
 export function mt5SymbolForAsset(asset: TradeAsset): string {
-  return asset === 'ETH' ? 'ETHUSD' : 'BTCUSD'
+  if (asset === 'ETH') return 'ETHUSD'
+  if (asset === 'XAU') return 'XAUUSD'
+  return 'BTCUSD'
 }
 
 export function venueSymbol(venue: TradeVenue, asset: TradeAsset): string {
   return venue === 'okx' ? okxInstIdForAsset(asset) : mt5SymbolForAsset(asset)
+}
+
+/** 旧版默认 MT5 黄金。对齐 BTC/ETH 时把未选手种写成了 BTC，回退一次。 */
+export function restoreMt5GoldDefault(
+  venue: TradeVenue,
+  asset: TradeAsset,
+  alreadyRestored: boolean
+): TradeAsset {
+  if (alreadyRestored) return asset
+  if (venue === 'mt5' && asset === 'BTC') return 'XAU'
+  return asset
 }
 
 export type OkxInstrumentSpec = {

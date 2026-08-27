@@ -22,7 +22,12 @@ import { cn } from '@/lib/utils'
 import { useAgentStore, useAppStore, useMarketStore, useNewsStore } from '@/stores'
 import { HOLDING_INTERVAL_MS } from '../../../../preload/agent-types'
 import { accountModeFromTradeMode } from '../../../../preload/mt5-types'
-import { TRADE_ASSETS, type TradeAsset } from '../../../../preload/okx-types'
+import {
+  TRADE_ASSETS,
+  TRADE_ASSET_LABELS,
+  asTradeAsset,
+  type TradeAsset
+} from '../../../../preload/okx-types'
 
 function useNow(intervalMs = 1000): number {
   const [now, setNow] = useState(() => Date.now())
@@ -87,9 +92,9 @@ export function TopBar(): JSX.Element {
     enabled && lastDecision ? Date.parse(lastDecision.createdAt) + effectiveMs - now : 0
   const haltWindow = calendar.some((ev) => ev.impact === 'high' && ev.soon)
   const venue = config?.venue ?? 'mt5'
-  const asset = config?.asset === 'ETH' ? 'ETH' : 'BTC'
+  const asset = asTradeAsset(config?.asset)
   const okxDemo = config?.okx?.demo !== false
-  const feed = venueStatus(ready, lastError, priceChangedAt, now, true)
+  const feed = venueStatus(ready, lastError, priceChangedAt, now, venue === 'okx' || asset !== 'XAU')
   const equity = account?.equity ?? null
   const profit = account?.profit ?? null
 
@@ -159,7 +164,7 @@ export function TopBar(): JSX.Element {
       <Segmented
         value={asset}
         disabled={saving || !config}
-        options={TRADE_ASSETS.map((id) => ({ value: id, label: id }))}
+        options={TRADE_ASSETS.map((id) => ({ value: id, label: TRADE_ASSET_LABELS[id] }))}
         onChange={(next: TradeAsset) => {
           if (next !== asset) void saveConfig({ asset: next })
         }}
